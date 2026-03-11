@@ -16,6 +16,11 @@ namespace UnityEngine
 {
     [System.AttributeUsage(System.AttributeTargets.Field)]
     public class SerializeField : System.Attribute { }
+
+    public class Object
+    {
+        public static implicit operator bool(Object value) => value != null;
+    }
 }
 ";
 
@@ -223,6 +228,60 @@ public class TestClass
     public void Method()
     {
         if (Target == null) return;
+    }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task SerializeFieldImplicitBoolCheck_VUA1001()
+        {
+            // if (field) → 検出
+            var test = SerializeFieldAttribute + @"
+public class TestComponent
+{
+    [UnityEngine.SerializeField] private UnityEngine.Object target;
+    public void Method()
+    {
+        if ({|#0:target|}) return;
+    }
+}";
+            var expected = Verify.Diagnostic("VUA1001")
+                .WithLocation(0)
+                .WithArguments("target");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task SerializeFieldImplicitBoolNegation_VUA1001()
+        {
+            // if (!field) → 検出
+            var test = SerializeFieldAttribute + @"
+public class TestComponent
+{
+    [UnityEngine.SerializeField] private UnityEngine.Object target;
+    public void Method()
+    {
+        if ({|#0:!target|}) return;
+    }
+}";
+            var expected = Verify.Diagnostic("VUA1001")
+                .WithLocation(0)
+                .WithArguments("target");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task SerializeFieldBoolCondition_NoDiagnostic()
+        {
+            // bool型フィールドの通常分岐 → 検出なし
+            var test = SerializeFieldAttribute + @"
+public class TestComponent
+{
+    [UnityEngine.SerializeField] private bool isVisible;
+    public void Method()
+    {
+        if (isVisible) return;
     }
 }";
             await Verify.VerifyAnalyzerAsync(test);

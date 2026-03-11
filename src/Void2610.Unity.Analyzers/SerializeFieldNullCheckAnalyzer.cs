@@ -39,6 +39,9 @@ namespace Void2610.Unity.Analyzers
             // x is null, x is not null
             context.RegisterSyntaxNodeAction(AnalyzeIsPattern,
                 SyntaxKind.IsPatternExpression);
+            // if (x), if (!x)
+            context.RegisterSyntaxNodeAction(AnalyzeIfStatement,
+                SyntaxKind.IfStatement);
         }
 
         private static void AnalyzeBinaryExpression(SyntaxNodeAnalysisContext context)
@@ -80,12 +83,26 @@ namespace Void2610.Unity.Analyzers
             ReportIfSerializeField(context, isPattern.Expression, isPattern.GetLocation());
         }
 
+        private static void AnalyzeIfStatement(SyntaxNodeAnalysisContext context)
+        {
+            var ifStatement = (IfStatementSyntax)context.Node;
+            var target = GetNullGuardLikeConditionTarget(ifStatement.Condition);
+
+            if (target == null)
+                return;
+
+            ReportIfSerializeField(context, target, ifStatement.Condition.GetLocation());
+        }
+
         private static void ReportIfSerializeField(
             SyntaxNodeAnalysisContext context, ExpressionSyntax expression, Location location)
         {
             if (GeneratedCodeHelper.IsGenerated(context.Node.SyntaxTree)) return;
             var symbol = context.SemanticModel.GetSymbolInfo(expression).Symbol;
             if (!(symbol is IFieldSymbol field))
+                return;
+
+            if (field.Type.SpecialType == SpecialType.System_Boolean)
                 return;
 
             var hasSerializeField = field.GetAttributes().Any(a =>
@@ -96,6 +113,23 @@ namespace Void2610.Unity.Analyzers
             {
                 context.ReportDiagnostic(Diagnostic.Create(VUA1001, location, field.Name));
             }
+        }
+
+        private static ExpressionSyntax GetNullGuardLikeConditionTarget(ExpressionSyntax condition)
+        {
+            while (condition is ParenthesizedExpressionSyntax parenthesized)
+                condition = parenthesized.Expression;
+
+            if (condition is PrefixUnaryExpressionSyntax prefixUnary &&
+                prefixUnary.IsKind(SyntaxKind.LogicalNotExpression))
+            {
+                condition = prefixUnary.Operand;
+            }
+
+            while (condition is ParenthesizedExpressionSyntax parenthesized)
+                condition = parenthesized.Expression;
+
+            return condition is IdentifierNameSyntax or MemberAccessExpressionSyntax ? condition : null;
         }
 
         private static bool IsNullLiteral(ExpressionSyntax expression) =>
