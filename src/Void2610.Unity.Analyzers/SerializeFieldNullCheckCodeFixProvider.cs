@@ -34,7 +34,7 @@ namespace Void2610.Unity.Analyzers
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "nullチェックを削除",
-                        ct => SimplifyIfStatementAsync(context.Document, ifStatement.Span, diagnostic.Location.SourceSpan, ct),
+                        ct => SimplifyIfStatementAsync(context.Document, diagnostic.Location.SourceSpan, ct),
                         nameof(SerializeFieldNullCheckCodeFixProvider) + ".If"),
                     diagnostic);
                 return;
@@ -64,22 +64,13 @@ namespace Void2610.Unity.Analyzers
         }
 
         private static async Task<Document> SimplifyIfStatementAsync(
-            Document document, TextSpan ifStatementSpan, TextSpan diagnosticSpan, CancellationToken cancellationToken)
+            Document document, TextSpan diagnosticSpan, CancellationToken cancellationToken)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var ifStatement = root?.DescendantNodes(descendIntoTrivia: true)
-                .OfType<IfStatementSyntax>()
-                .FirstOrDefault(x => x.Span == ifStatementSpan);
-            var diagnosticNode = root?.DescendantNodes(descendIntoTrivia: true)
-                .FirstOrDefault(x => x.Span == diagnosticSpan);
+            var diagnosticNode = root?.FindNode(diagnosticSpan, getInnermostNodeForTie: true);
+            var ifStatement = diagnosticNode?.FirstAncestorOrSelf<IfStatementSyntax>();
             if (ifStatement == null || diagnosticNode == null)
                 return document;
-
-            if (ifStatement.Else == null &&
-                TryGetDirectReplacementStatement(ifStatement.Statement, ifStatement.GetLeadingTrivia(), ifStatement.GetTrailingTrivia(), out var directReplacement))
-            {
-                return document.WithSyntaxRoot(root.ReplaceNode(ifStatement, directReplacement));
-            }
 
             var replacementTarget = FindReplacementTarget(diagnosticNode, ifStatement.Condition);
             if (replacementTarget == null)
@@ -132,30 +123,6 @@ namespace Void2610.Unity.Analyzers
                 .WithTrailingTrivia(trailingTrivia);
         }
 
-        private static bool TryGetDirectReplacementStatement(
-            StatementSyntax statement, SyntaxTriviaList leadingTrivia, SyntaxTriviaList trailingTrivia, out StatementSyntax replacementStatement)
-        {
-            if (statement is ExpressionStatementSyntax or ReturnStatementSyntax)
-            {
-                replacementStatement = statement
-                    .WithLeadingTrivia(leadingTrivia)
-                    .WithTrailingTrivia(trailingTrivia);
-                return true;
-            }
-
-            if (statement is BlockSyntax block && block.Statements.Count == 1 &&
-                block.Statements[0] is ExpressionStatementSyntax or ReturnStatementSyntax)
-            {
-                replacementStatement = block.Statements[0]
-                    .WithLeadingTrivia(leadingTrivia)
-                    .WithTrailingTrivia(trailingTrivia);
-                return true;
-            }
-
-            replacementStatement = null;
-            return false;
-        }
-
         private static ExpressionSyntax FindReplacementTarget(SyntaxNode diagnosticNode, ExpressionSyntax condition)
         {
             var current = diagnosticNode;
@@ -186,6 +153,30 @@ namespace Void2610.Unity.Analyzers
                 }
 
                 current = current.Parent;
+            }
+
+            if (current is PrefixUnaryExpressionSyntax currentPrefix &&
+                currentPrefix.IsKind(SyntaxKind.LogicalNotExpression))
+            {
+                return currentPrefix;
+            }
+
+            if (current is BinaryExpressionSyntax currentBinary &&
+                (currentBinary.IsKind(SyntaxKind.EqualsExpression) ||
+                 currentBinary.IsKind(SyntaxKind.NotEqualsExpression) ||
+                 currentBinary.IsKind(SyntaxKind.CoalesceExpression)))
+            {
+                return currentBinary;
+            }
+
+            if (current is IsPatternExpressionSyntax currentIsPattern)
+            {
+                return currentIsPattern;
+            }
+
+            if (current is IdentifierNameSyntax or MemberAccessExpressionSyntax)
+            {
+                return (ExpressionSyntax)current;
             }
 
             return null;
