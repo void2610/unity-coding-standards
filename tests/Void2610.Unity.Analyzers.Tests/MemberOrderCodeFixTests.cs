@@ -108,6 +108,152 @@ public class TestClass
         }
 
         [Fact]
+        public async Task ProtectedMethodAfterPrivateMethod_Reordered()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    private void Helper()
+    {
+        _count = 0;
+    }
+
+    protected virtual void {|#0:Hook|}()
+    {
+        _count = 1;
+    }
+}";
+
+            var fixedCode = @"
+public class TestClass
+{
+    private int _count;
+
+    protected virtual void Hook()
+    {
+        _count = 1;
+    }
+
+    private void Helper()
+    {
+        _count = 0;
+    }
+}";
+
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("Hook", "protected methods (multi line)", "private methods (multi line)");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
+        public async Task ProtectedOneLineAfterProtectedMultiLine_Reordered()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    protected virtual void Hook()
+    {
+        _count = 1;
+    }
+
+    protected virtual int {|#0:GetValue|}() => _count;
+}";
+
+            var fixedCode = @"
+public class TestClass
+{
+    private int _count;
+
+    protected virtual int GetValue() => _count;
+
+    protected virtual void Hook()
+    {
+        _count = 1;
+    }
+}";
+
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetValue", "protected methods (one line)", "protected methods (multi line)");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
+        public async Task ProtectedOneLineAfterPrivateOneLine_Reordered()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    private int GetPrivate() => _count;
+
+    protected int {|#0:GetProtected|}() => _count;
+}";
+
+            var fixedCode = @"
+public class TestClass
+{
+    private int _count;
+
+    protected int GetProtected() => _count;
+
+    private int GetPrivate() => _count;
+}";
+
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetProtected", "protected methods (one line)", "private methods (one line)");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
+        public async Task PrivateMethodWithIfDirective_ReorderedKeepingDirectiveBlock()
+        {
+            var test = @"
+#define UNITY_EDITOR
+
+public class TestClass
+{
+    public int Value() => 1;
+
+#if UNITY_EDITOR
+    private void DebugOnly()
+    {
+    }
+#endif
+
+    protected int {|#0:GetProtected|}() => 1;
+}";
+
+            var fixedCode = @"
+#define UNITY_EDITOR
+
+public class TestClass
+{
+    public int Value() => 1;
+    protected int GetProtected() => 1;
+
+#if UNITY_EDITOR
+    private void DebugOnly()
+    {
+    }
+#endif
+
+}";
+
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetProtected", "protected methods (one line)", "private methods (multi line)");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
         public async Task ConstAndPrivateFieldSpacing_Normalized()
         {
             var test = @"

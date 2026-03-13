@@ -40,10 +40,13 @@ namespace Void2610.Unity.Analyzers
             PrivateField = 4,
             Constructor = 5,
             PublicMethodOneLine = 6,
-            PublicMethodMultiLine = 7,
-            PrivateMethod = 8,
-            UnityEvent = 9,
-            Cleanup = 10,
+            ProtectedMethodOneLine = 7,
+            PrivateMethodOneLine = 8,
+            PublicMethodMultiLine = 9,
+            ProtectedMethodMultiLine = 10,
+            PrivateMethodMultiLine = 11,
+            UnityEvent = 12,
+            Cleanup = 13,
             Excluded = -1
         }
 
@@ -57,8 +60,11 @@ namespace Void2610.Unity.Analyzers
             { MemberCategory.PrivateField, "private fields" },
             { MemberCategory.Constructor, "constructors" },
             { MemberCategory.PublicMethodOneLine, "public methods (one line)" },
+            { MemberCategory.ProtectedMethodOneLine, "protected methods (one line)" },
+            { MemberCategory.PrivateMethodOneLine, "private methods (one line)" },
             { MemberCategory.PublicMethodMultiLine, "public methods (multi line)" },
-            { MemberCategory.PrivateMethod, "private methods" },
+            { MemberCategory.ProtectedMethodMultiLine, "protected methods (multi line)" },
+            { MemberCategory.PrivateMethodMultiLine, "private methods (multi line)" },
             { MemberCategory.UnityEvent, "Unity events" },
             { MemberCategory.Cleanup, "cleanup" }
         };
@@ -327,8 +333,19 @@ namespace Void2610.Unity.Analyzers
                 return MemberCategory.PublicMethodMultiLine;
             }
 
-            // その他（private, protected, internal）
-            return MemberCategory.PrivateMethod;
+            if (method.Modifiers.Any(SyntaxKind.ProtectedKeyword) ||
+                method.Modifiers.Any(SyntaxKind.InternalKeyword))
+            {
+                if (method.ExpressionBody != null)
+                    return MemberCategory.ProtectedMethodOneLine;
+
+                return MemberCategory.ProtectedMethodMultiLine;
+            }
+
+            if (method.ExpressionBody != null)
+                return MemberCategory.PrivateMethodOneLine;
+
+            return MemberCategory.PrivateMethodMultiLine;
         }
 
         private static bool HasSerializeFieldAttribute(FieldDeclarationSyntax field)

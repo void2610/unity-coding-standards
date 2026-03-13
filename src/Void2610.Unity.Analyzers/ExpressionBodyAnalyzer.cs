@@ -42,6 +42,10 @@ namespace Void2610.Unity.Analyzers
             if (method.Body == null)
                 return;
 
+            // プリプロセッサ付きメソッドは code fix で壊れやすいため除外
+            if (method.ContainsDirectives)
+                return;
+
             // publicメソッドのみ対象
             if (!method.Modifiers.Any(SyntaxKind.PublicKeyword))
                 return;

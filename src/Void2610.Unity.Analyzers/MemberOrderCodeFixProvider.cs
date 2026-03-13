@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Void2610.Unity.Analyzers
@@ -43,7 +44,7 @@ namespace Void2610.Unity.Analyzers
             Document document, TypeDeclarationSyntax typeDeclaration, CancellationToken cancellationToken)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var members = typeDeclaration.Members;
+            var members = NormalizeDirectiveWrappedMembers(typeDeclaration.Members);
 
             // 各メンバーをカテゴリで分類
             var categorized = new List<(MemberDeclarationSyntax Member, MemberOrderAnalyzer.MemberCategory Category, int OriginalIndex)>();
@@ -69,16 +70,79 @@ namespace Void2610.Unity.Analyzers
                 .Select(x => x.Member)
                 .ToList();
 
-            // Excludedメンバーを元の相対位置に再挿入
-            // Excludedメンバーは末尾に追加する
-            sorted.AddRange(excluded.OrderBy(x => x.OriginalIndex).Select(x => x.Member));
+            // Excludedメンバーは元位置を維持して再挿入する
+            foreach (var (member, originalIndex) in excluded.OrderBy(x => x.OriginalIndex))
+            {
+                var insertIndex = originalIndex;
+                if (insertIndex < 0) insertIndex = 0;
+                if (insertIndex > sorted.Count) insertIndex = sorted.Count;
+                sorted.Insert(insertIndex, member);
+            }
 
             var newMembers = SyntaxFactory.List(sorted);
             var newTypeDeclaration = typeDeclaration.WithMembers(newMembers);
 
             var newRoot = root.ReplaceNode(typeDeclaration, newTypeDeclaration);
             var updatedDocument = document.WithSyntaxRoot(newRoot);
+            updatedDocument = await Formatter.FormatAsync(updatedDocument, cancellationToken: cancellationToken).ConfigureAwait(false);
+            newRoot = await updatedDocument.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+            newTypeDeclaration = newRoot.FindNode(typeDeclaration.Span).FirstAncestorOrSelf<TypeDeclarationSyntax>() ?? newTypeDeclaration;
             return await NormalizeMemberSpacingAsync(updatedDocument, newTypeDeclaration, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static SyntaxList<MemberDeclarationSyntax> NormalizeDirectiveWrappedMembers(
+            SyntaxList<MemberDeclarationSyntax> members)
+        {
+            var normalizedMembers = members.ToList();
+
+            for (var i = 0; i < normalizedMembers.Count - 1; i++)
+            {
+                var current = normalizedMembers[i];
+                var next = normalizedMembers[i + 1];
+
+                if (!HasOpeningConditionalDirective(current.GetLeadingTrivia()))
+                    continue;
+
+                var transferredTrivia = ExtractLeadingConditionalEndTrivia(next.GetLeadingTrivia());
+                if (transferredTrivia.Count == 0)
+                    continue;
+
+                normalizedMembers[i] = current.WithTrailingTrivia(current.GetTrailingTrivia().AddRange(transferredTrivia));
+                normalizedMembers[i + 1] = next.WithLeadingTrivia(next.GetLeadingTrivia().Skip(transferredTrivia.Count));
+            }
+
+            return SyntaxFactory.List(normalizedMembers);
+        }
+
+        private static bool HasOpeningConditionalDirective(SyntaxTriviaList triviaList) =>
+            triviaList.Any(trivia =>
+                trivia.IsKind(SyntaxKind.IfDirectiveTrivia) ||
+                trivia.IsKind(SyntaxKind.ElifDirectiveTrivia) ||
+                trivia.IsKind(SyntaxKind.ElseDirectiveTrivia));
+
+        private static SyntaxTriviaList ExtractLeadingConditionalEndTrivia(SyntaxTriviaList triviaList)
+        {
+            var collected = new List<SyntaxTrivia>();
+
+            foreach (var trivia in triviaList)
+            {
+                if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) ||
+                    trivia.IsKind(SyntaxKind.EndOfLineTrivia))
+                {
+                    collected.Add(trivia);
+                    continue;
+                }
+
+                if (trivia.IsKind(SyntaxKind.EndIfDirectiveTrivia))
+                {
+                    collected.Add(trivia);
+                    continue;
+                }
+
+                break;
+            }
+
+            return SyntaxFactory.TriviaList(collected);
         }
 
         private static async Task<Document> NormalizeMemberSpacingAsync(

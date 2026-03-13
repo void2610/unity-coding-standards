@@ -120,7 +120,7 @@ public class TestClass
 }";
             var expected = Verify.Diagnostic("VUA3002")
                 .WithLocation(0)
-                .WithArguments("Helper", "private methods", "Unity events");
+                .WithArguments("Helper", "private methods (multi line)", "Unity events");
             await Verify.VerifyAnalyzerAsync(test, expected);
         }
 
@@ -169,6 +169,24 @@ public class TestClass
             var expected = Verify.Diagnostic("VUA3002")
                 .WithLocation(0)
                 .WithArguments("GetValue", "public methods (one line)", "public methods (multi line)");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task ProtectedOneLineAfterPrivateOneLine_SecondPattern_VUA3002()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    private int GetPrivate() => _count;
+
+    protected int {|#0:GetProtected|}() => _count;
+}";
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetProtected", "protected methods (one line)", "private methods (one line)");
             await Verify.VerifyAnalyzerAsync(test, expected);
         }
 
@@ -301,6 +319,94 @@ public class TestClass : BaseClass
     }
 }";
             await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task ProtectedMethodAfterPublicMethod_NoDiagnostic()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    public int GetPublic() => _count;
+
+    protected virtual int GetProtected() => _count;
+
+    public void Execute()
+    {
+        _count++;
+    }
+
+    protected virtual void Hook()
+    {
+        _count = 1;
+    }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task ProtectedOneLineAfterProtectedMultiLine_VUA3002()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    protected virtual void Hook()
+    {
+        _count = 1;
+    }
+
+    protected virtual int {|#0:GetValue|}() => _count;
+}";
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetValue", "protected methods (one line)", "protected methods (multi line)");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task ProtectedMultiLineAfterPrivateMultiLine_VUA3002()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    private void Helper()
+    {
+        _count = 0;
+    }
+
+    protected virtual void {|#0:Hook|}()
+    {
+        _count = 1;
+    }
+}";
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("Hook", "protected methods (multi line)", "private methods (multi line)");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task ProtectedOneLineAfterPrivateOneLine_VUA3002()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+
+    private int GetPrivate() => _count;
+
+    protected int {|#0:GetProtected|}() => _count;
+}";
+            var expected = Verify.Diagnostic("VUA3002")
+                .WithLocation(0)
+                .WithArguments("GetProtected", "protected methods (one line)", "private methods (one line)");
+            await Verify.VerifyAnalyzerAsync(test, expected);
         }
 
         [Fact]

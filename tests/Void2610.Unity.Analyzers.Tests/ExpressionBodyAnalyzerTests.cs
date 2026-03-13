@@ -187,5 +187,25 @@ public class TestClass
 }";
             await Verify.VerifyAnalyzerAsync(test);
         }
+
+        [Fact]
+        public async Task PublicMethodWithDirective_NoDiagnostic()
+        {
+            var test = @"
+#define UNITY_EDITOR
+
+public class TestClass
+{
+    public void RegisterAll()
+    {
+#if UNITY_EDITOR
+        DoWork();
+#endif
+    }
+
+    private void DoWork() { }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
     }
 }
