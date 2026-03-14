@@ -114,11 +114,7 @@ namespace Void2610.Unity.Analyzers
             return SyntaxFactory.List(normalizedMembers);
         }
 
-        private static bool HasOpeningConditionalDirective(SyntaxTriviaList triviaList) =>
-            triviaList.Any(trivia =>
-                trivia.IsKind(SyntaxKind.IfDirectiveTrivia) ||
-                trivia.IsKind(SyntaxKind.ElifDirectiveTrivia) ||
-                trivia.IsKind(SyntaxKind.ElseDirectiveTrivia));
+        private static bool HasOpeningConditionalDirective(SyntaxTriviaList triviaList) => triviaList.Any(trivia => trivia.IsKind(SyntaxKind.IfDirectiveTrivia) || trivia.IsKind(SyntaxKind.ElifDirectiveTrivia) || trivia.IsKind(SyntaxKind.ElseDirectiveTrivia));
 
         private static SyntaxTriviaList ExtractLeadingConditionalEndTrivia(SyntaxTriviaList triviaList)
         {

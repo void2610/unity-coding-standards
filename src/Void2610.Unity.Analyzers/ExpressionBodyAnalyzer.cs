@@ -10,11 +10,11 @@ namespace Void2610.Unity.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class ExpressionBodyAnalyzer : DiagnosticAnalyzer
     {
-        // 単一文のpublicメソッドには式本体を使用するよう警告
+        // 単一文の対象メソッドには式本体を使用し、式本体は1行に収めるよう警告
         public static readonly DiagnosticDescriptor VUA3001 = new DiagnosticDescriptor(
             "VUA3001",
-            "単一文のpublicメソッドには式本体を使用してください",
-            "メソッド '{0}' は単一文のため式本体 (=>) で記述してください",
+            "対象メソッドは1行の式本体で記述してください",
+            "メソッド '{0}' は1行の式本体 (=>) で記述してください",
             "Style",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);
@@ -34,9 +34,18 @@ namespace Void2610.Unity.Analyzers
             if (GeneratedCodeHelper.IsGenerated(context.Node.SyntaxTree)) return;
             var method = (MethodDeclarationSyntax)context.Node;
 
-            // 既に式本体の場合は除外
             if (method.ExpressionBody != null)
+            {
+                if (IsSingleLineExpressionBody(method))
+                    return;
+
+                var expressionBodyDiagnostic = Diagnostic.Create(
+                    VUA3001,
+                    method.Identifier.GetLocation(),
+                    method.Identifier.Text);
+                context.ReportDiagnostic(expressionBodyDiagnostic);
                 return;
+            }
 
             // ブロック本体がない場合は除外（抽象メソッド等）
             if (method.Body == null)
@@ -72,6 +81,13 @@ namespace Void2610.Unity.Analyzers
                 method.Identifier.GetLocation(),
                 method.Identifier.Text);
             context.ReportDiagnostic(diagnostic);
+        }
+
+        private static bool IsSingleLineExpressionBody(MethodDeclarationSyntax method)
+        {
+            var startLine = method.GetLocation().GetLineSpan().StartLinePosition.Line;
+            var endLine = method.SemicolonToken.GetLocation().GetLineSpan().EndLinePosition.Line;
+            return startLine == endLine;
         }
     }
 }

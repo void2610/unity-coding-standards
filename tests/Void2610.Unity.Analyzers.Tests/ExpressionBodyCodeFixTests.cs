@@ -81,5 +81,45 @@ public class TestClass
                 .WithArguments("Execute");
             await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
         }
+
+        [Fact]
+        public async Task MultiLineExpressionBody_ConvertedToSingleLine()
+        {
+            var test = @"
+public class TestClass
+{
+    public int {|#0:GetValue|}() =>
+        42;
+}";
+            var fixedCode = @"
+public class TestClass
+{
+    public int GetValue() => 42;
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("GetValue");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
+        public async Task MultiLineSignatureExpressionBody_ConvertedToSingleLine()
+        {
+            var test = @"
+public class TestClass
+{
+    public int {|#0:GetValue|}(
+        int value) => value;
+}";
+            var fixedCode = @"
+public class TestClass
+{
+    public int GetValue(int value) => value;
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("GetValue");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
     }
 }

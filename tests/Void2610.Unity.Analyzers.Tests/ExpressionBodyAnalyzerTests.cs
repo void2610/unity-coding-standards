@@ -58,6 +58,51 @@ public class TestClass
         }
 
         [Fact]
+        public async Task PublicMethodMultiLineExpressionBody_VUA3001()
+        {
+            var test = @"
+public class TestClass
+{
+    public int {|#0:GetValue|}() =>
+        42;
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("GetValue");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task PublicMethodMultiLineSignatureExpressionBody_VUA3001()
+        {
+            var test = @"
+public class TestClass
+{
+    public int {|#0:GetValue|}(
+        int value) => value;
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("GetValue");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task ProtectedMethodMultiLineExpressionBody_VUA3001()
+        {
+            var test = @"
+public class TestClass
+{
+    protected int {|#0:GetValue|}() =>
+        42;
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("GetValue");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
         public async Task PublicMethodMultipleStatements_NoDiagnostic()
         {
             // 複数ステートメントのため除外

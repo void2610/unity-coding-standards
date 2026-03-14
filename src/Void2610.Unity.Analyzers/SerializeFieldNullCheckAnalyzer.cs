@@ -146,8 +146,7 @@ namespace Void2610.Unity.Analyzers
                 yield return condition;
         }
 
-        private static bool IsNullLiteral(ExpressionSyntax expression) =>
-            expression.IsKind(SyntaxKind.NullLiteralExpression);
+        private static bool IsNullLiteral(ExpressionSyntax expression) => expression.IsKind(SyntaxKind.NullLiteralExpression);
 
         private static bool IsNullPattern(PatternSyntax pattern)
         {

@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Composition;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -31,7 +30,7 @@ namespace Void2610.Unity.Analyzers
 
             context.RegisterCodeFix(
                 CodeAction.Create(
-                    "式本体 (=>) に変換",
+                    "1行の式本体 (=>) に変換",
                     ct => ConvertToExpressionBodyAsync(context.Document, method, ct),
                     nameof(ExpressionBodyCodeFixProvider)),
                 diagnostic);
@@ -41,30 +40,51 @@ namespace Void2610.Unity.Analyzers
             Document document, MethodDeclarationSyntax method, CancellationToken cancellationToken)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var statement = method.Body.Statements[0];
+            MethodDeclarationSyntax newMethod;
 
-            ExpressionSyntax expression;
-            if (statement is ReturnStatementSyntax returnStatement)
+            if (method.ExpressionBody != null)
             {
-                expression = returnStatement.Expression;
-            }
-            else if (statement is ExpressionStatementSyntax expressionStatement)
-            {
-                expression = expressionStatement.Expression;
+                newMethod = CreateSingleLineExpressionBodyMethod(method, method.ExpressionBody.Expression);
             }
             else
             {
-                return document;
-            }
+                var statement = method.Body.Statements[0];
+                ExpressionSyntax expression;
+                if (statement is ReturnStatementSyntax returnStatement)
+                {
+                    expression = returnStatement.Expression;
+                }
+                else if (statement is ExpressionStatementSyntax expressionStatement)
+                {
+                    expression = expressionStatement.Expression;
+                }
+                else
+                {
+                    return document;
+                }
 
-            var newMethod = method
-                .WithBody(null)
-                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expression))
-                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                .WithTrailingTrivia(method.GetTrailingTrivia());
+                newMethod = CreateSingleLineExpressionBodyMethod(method, expression);
+            }
 
             var newRoot = root.ReplaceNode(method, newMethod);
             return document.WithSyntaxRoot(newRoot);
+        }
+
+        private static MethodDeclarationSyntax CreateSingleLineExpressionBodyMethod(
+            MethodDeclarationSyntax method,
+            ExpressionSyntax expression)
+        {
+            var leadingTrivia = method.GetLeadingTrivia();
+            var trailingTrivia = method.GetTrailingTrivia();
+
+            return method
+                .WithBody(null)
+                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expression.WithoutTrivia()))
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithoutTrivia()
+                .NormalizeWhitespace()
+                .WithLeadingTrivia(leadingTrivia)
+                .WithTrailingTrivia(trailingTrivia);
         }
     }
 }
