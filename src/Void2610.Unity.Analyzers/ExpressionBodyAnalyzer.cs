@@ -36,6 +36,26 @@ namespace Void2610.Unity.Analyzers
 
             if (method.ExpressionBody != null)
             {
+                // switch式を含む場合は複数行でも許可（ブロック本体パスと一貫性を保つ）
+                if (method.ExpressionBody.DescendantNodes().OfType<SwitchExpressionSyntax>().Any())
+                    return;
+
+                // コレクション初期化子や複雑なオブジェクト生成を含む場合は複数行を許可
+                if (method.ExpressionBody.DescendantNodes().OfType<InitializerExpressionSyntax>().Any())
+                    return;
+
+                // 三項演算子が複数行にわたる場合は許可
+                if (HasMultiLineConditionalExpression(method.ExpressionBody))
+                    return;
+
+                // 引数リストが複数行にわたる場合は許可
+                if (HasMultiLineArgumentList(method.ExpressionBody))
+                    return;
+
+                // メソッドのシグネチャ（パラメータ）が複数行にわたる場合は許可
+                if (!IsSingleLineSignature(method))
+                    return;
+
                 if (IsSingleLineExpressionBody(method))
                     return;
 
@@ -85,9 +105,43 @@ namespace Void2610.Unity.Analyzers
 
         private static bool IsSingleLineExpressionBody(MethodDeclarationSyntax method)
         {
-            var startLine = method.GetLocation().GetLineSpan().StartLinePosition.Line;
+            // 属性を除いたメソッドシグネチャの開始行から判定する
+            // method.GetLocation() は属性行も含むため ReturnType を基準にする
+            var startLine = method.ReturnType.GetLocation().GetLineSpan().StartLinePosition.Line;
             var endLine = method.SemicolonToken.GetLocation().GetLineSpan().EndLinePosition.Line;
             return startLine == endLine;
+        }
+
+        private static bool IsSingleLineSignature(MethodDeclarationSyntax method)
+        {
+            // パラメータリストが複数行にわたる場合は false
+            var openParen = method.ParameterList.OpenParenToken.GetLocation().GetLineSpan().StartLinePosition.Line;
+            var closeParen = method.ParameterList.CloseParenToken.GetLocation().GetLineSpan().EndLinePosition.Line;
+            return openParen == closeParen;
+        }
+
+        private static bool HasMultiLineConditionalExpression(ArrowExpressionClauseSyntax expressionBody)
+        {
+            return expressionBody.DescendantNodes()
+                .OfType<ConditionalExpressionSyntax>()
+                .Any(c =>
+                {
+                    var start = c.GetLocation().GetLineSpan().StartLinePosition.Line;
+                    var end = c.GetLocation().GetLineSpan().EndLinePosition.Line;
+                    return start != end;
+                });
+        }
+
+        private static bool HasMultiLineArgumentList(ArrowExpressionClauseSyntax expressionBody)
+        {
+            return expressionBody.DescendantNodes()
+                .OfType<ArgumentListSyntax>()
+                .Any(a =>
+                {
+                    var start = a.GetLocation().GetLineSpan().StartLinePosition.Line;
+                    var end = a.GetLocation().GetLineSpan().EndLinePosition.Line;
+                    return start != end;
+                });
         }
     }
 }

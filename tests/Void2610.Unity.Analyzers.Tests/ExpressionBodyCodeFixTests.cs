@@ -103,23 +103,16 @@ public class TestClass
         }
 
         [Fact]
-        public async Task MultiLineSignatureExpressionBody_ConvertedToSingleLine()
+        public async Task MultiLineSignatureExpressionBody_NoDiagnostic()
         {
+            // パラメータが複数行に分かれている場合は除外（警告なし・変換なし）
             var test = @"
 public class TestClass
 {
-    public int {|#0:GetValue|}(
+    public int GetValue(
         int value) => value;
 }";
-            var fixedCode = @"
-public class TestClass
-{
-    public int GetValue(int value) => value;
-}";
-            var expected = Verify.Diagnostic("VUA3001")
-                .WithLocation(0)
-                .WithArguments("GetValue");
-            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+            await Verify.VerifyCodeFixAsync(test, test);
         }
     }
 }

@@ -73,18 +73,16 @@ public class TestClass
         }
 
         [Fact]
-        public async Task PublicMethodMultiLineSignatureExpressionBody_VUA3001()
+        public async Task PublicMethodMultiLineSignatureExpressionBody_NoDiagnostic()
         {
+            // パラメータが複数行に分かれている場合は除外
             var test = @"
 public class TestClass
 {
-    public int {|#0:GetValue|}(
+    public int GetValue(
         int value) => value;
 }";
-            var expected = Verify.Diagnostic("VUA3001")
-                .WithLocation(0)
-                .WithArguments("GetValue");
-            await Verify.VerifyAnalyzerAsync(test, expected);
+            await Verify.VerifyAnalyzerAsync(test);
         }
 
         [Fact]
@@ -213,6 +211,55 @@ public class TestClass
             _ => ""Other""
         };
     }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task PublicMethodWithAttributeSingleLineExpressionBody_NoDiagnostic()
+        {
+            // 属性付きメソッドで式本体が1行の場合は除外
+            var test = @"
+using System;
+public class TestClass
+{
+    [Obsolete]
+    public int GetValue() => 42;
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task PublicMethodExpressionBodyWithSwitchExpression_NoDiagnostic()
+        {
+            // 式本体にswitch式を含む場合は複数行でも除外
+            var test = @"
+public class TestClass
+{
+    public string GetName(int x) => x switch
+    {
+        1 => ""One"",
+        2 => ""Two"",
+        _ => ""Other""
+    };
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task PublicMethodExpressionBodyWithInitializer_NoDiagnostic()
+        {
+            // 式本体にコレクション初期化子を含む場合は複数行でも除外
+            var test = @"
+using System.Collections.Generic;
+public class TestClass
+{
+    public List<int> GetValues() => new List<int>
+    {
+        1,
+        2,
+        3
+    };
 }";
             await Verify.VerifyAnalyzerAsync(test);
         }

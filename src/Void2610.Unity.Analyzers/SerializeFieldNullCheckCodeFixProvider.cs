@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -67,24 +68,14 @@ namespace Void2610.Unity.Analyzers
             Document document, TextSpan diagnosticSpan, CancellationToken cancellationToken)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
             var diagnosticNode = root?.FindNode(diagnosticSpan, getInnermostNodeForTie: true);
             var ifStatement = diagnosticNode?.FirstAncestorOrSelf<IfStatementSyntax>();
-            if (ifStatement == null || diagnosticNode == null)
+            if (ifStatement == null || diagnosticNode == null || semanticModel == null)
                 return document;
 
-            var replacementTarget = FindReplacementTarget(diagnosticNode, ifStatement.Condition);
-            if (replacementTarget == null)
-                return document;
-
-            var replacementValue = EvaluateReplacement(replacementTarget);
-            if (replacementValue == null)
-                return document;
-
-            var replacedCondition = ifStatement.Condition.ReplaceNode(
-                replacementTarget,
-                SyntaxFactory.LiteralExpression(replacementValue.Value ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression)
-                    .WithTriviaFrom(replacementTarget));
-
+            // 条件内の全[SerializeField]フィールド参照を一括でtrue/falseに置換する
+            var replacedCondition = ReplaceAllSerializeFieldChecks(ifStatement.Condition, semanticModel);
             var simplifiedCondition = SimplifyCondition(replacedCondition);
 
             if (TryEvaluateBooleanLiteral(simplifiedCondition, out var conditionValue))
@@ -100,15 +91,97 @@ namespace Void2610.Unity.Analyzers
                     replacementStatement = UnwrapStatement(ifStatement.Else.Statement, ifStatement.GetLeadingTrivia(), ifStatement.GetTrailingTrivia());
                 }
 
-                var newRoot = replacementStatement != null
-                    ? root.ReplaceNode(ifStatement, replacementStatement)
-                    : root.RemoveNode(ifStatement, SyntaxRemoveOptions.KeepNoTrivia);
+                SyntaxNode newRoot;
+                if (replacementStatement == null)
+                {
+                    newRoot = root.RemoveNode(ifStatement, SyntaxRemoveOptions.KeepNoTrivia);
+                }
+                else if (replacementStatement is BlockSyntax multiBlock &&
+                         multiBlock.Statements.Count > 1 &&
+                         ifStatement.Parent is BlockSyntax parentBlock)
+                {
+                    // 複数ステートメントのブロックは{}が残らないよう親ブロックにインライン化する
+                    // 1番目のステートメントには if 文のトリビア（コメント含む）を維持し、
+                    // 2番目以降はインデントのみ付与する
+                    var leadingTrivia = ifStatement.GetLeadingTrivia();
+                    var indentOnly = GetIndentationTrivia(leadingTrivia);
+                    var trailingTrivia = ifStatement.GetTrailingTrivia();
+                    var inlined = new List<StatementSyntax>();
+                    for (var i = 0; i < multiBlock.Statements.Count; i++)
+                    {
+                        var trivia = i == 0 ? leadingTrivia : indentOnly;
+                        var stmt = multiBlock.Statements[i].WithLeadingTrivia(trivia);
+                        if (i == multiBlock.Statements.Count - 1)
+                            stmt = stmt.WithTrailingTrivia(trailingTrivia);
+                        inlined.Add(stmt);
+                    }
+                    var idx = parentBlock.Statements.IndexOf(ifStatement);
+                    var newStatements = parentBlock.Statements.RemoveAt(idx);
+                    for (var i = inlined.Count - 1; i >= 0; i--)
+                        newStatements = newStatements.Insert(idx, inlined[i]);
+                    newRoot = root.ReplaceNode(parentBlock, parentBlock.WithStatements(newStatements));
+                }
+                else
+                {
+                    newRoot = root.ReplaceNode(ifStatement, replacementStatement);
+                }
 
                 return document.WithSyntaxRoot(newRoot);
             }
 
             var newIfStatement = ifStatement.WithCondition(simplifiedCondition);
             return document.WithSyntaxRoot(root.ReplaceNode(ifStatement, newIfStatement));
+        }
+
+        private static ExpressionSyntax ReplaceAllSerializeFieldChecks(
+            ExpressionSyntax condition, SemanticModel semanticModel)
+        {
+            // 条件内の全[SerializeField]フィールド識別子を収集し、一括でtrue/falseに置換する
+            var replacements = new Dictionary<ExpressionSyntax, ExpressionSyntax>();
+            foreach (var expr in condition.DescendantNodesAndSelf().OfType<ExpressionSyntax>())
+            {
+                if (replacements.ContainsKey(expr)) continue;
+                var target = FindReplacementTarget(expr, condition);
+                if (target == null || replacements.ContainsKey(target)) continue;
+                if (!IsSerializeFieldAccessExpression(target, semanticModel)) continue;
+                var value = EvaluateReplacement(target);
+                if (value == null) continue;
+                replacements[target] = SyntaxFactory.LiteralExpression(
+                    value.Value ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression)
+                    .WithTriviaFrom(target);
+            }
+            if (replacements.Count == 0) return condition;
+            return condition.ReplaceNodes(replacements.Keys, (original, _) => replacements[original]);
+        }
+
+        private static bool IsSerializeFieldAccessExpression(
+            ExpressionSyntax expression, SemanticModel semanticModel)
+        {
+            // 対象となる識別子・メンバーアクセスを特定する
+            ExpressionSyntax accessor = expression switch
+            {
+                PrefixUnaryExpressionSyntax prefix when prefix.IsKind(SyntaxKind.LogicalNotExpression) => prefix.Operand,
+                BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression) || binary.IsKind(SyntaxKind.NotEqualsExpression) => binary.Left,
+                IsPatternExpressionSyntax isPattern => isPattern.Expression,
+                IdentifierNameSyntax or MemberAccessExpressionSyntax => expression,
+                _ => null
+            };
+            if (accessor == null) return false;
+            // セマンティックモデルで[SerializeField]フィールドか確認
+            if (semanticModel.GetSymbolInfo(accessor).Symbol is not IFieldSymbol field)
+                return false;
+            return field.GetAttributes().Any(a => a.AttributeClass?.Name == "SerializeField");
+        }
+
+        private static SyntaxTriviaList GetIndentationTrivia(SyntaxTriviaList leadingTrivia)
+        {
+            // 末尾の空白トリビア（インデント）のみを抽出する
+            for (var i = leadingTrivia.Count - 1; i >= 0; i--)
+            {
+                if (leadingTrivia[i].IsKind(SyntaxKind.WhitespaceTrivia))
+                    return SyntaxFactory.TriviaList(leadingTrivia[i]);
+            }
+            return SyntaxFactory.TriviaList();
         }
 
         private static StatementSyntax UnwrapStatement(StatementSyntax statement, SyntaxTriviaList leadingTrivia, SyntaxTriviaList trailingTrivia)
