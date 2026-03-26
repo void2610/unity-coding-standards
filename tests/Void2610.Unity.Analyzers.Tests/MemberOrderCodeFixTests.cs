@@ -212,7 +212,7 @@ public class TestClass
         }
 
         [Fact]
-        public async Task PrivateMethodWithIfDirective_ReorderedKeepingDirectiveBlock()
+        public async Task PrivateMethodWithIfDirective_NoCodeFixNeeded()
         {
             var test = @"
 #define UNITY_EDITOR
@@ -227,29 +227,9 @@ public class TestClass
     }
 #endif
 
-    protected int {|#0:GetProtected|}() => 1;
-}";
-
-            var fixedCode = @"
-#define UNITY_EDITOR
-
-public class TestClass
-{
-    public int Value() => 1;
     protected int GetProtected() => 1;
-
-#if UNITY_EDITOR
-    private void DebugOnly()
-    {
-    }
-#endif
-
 }";
-
-            var expected = Verify.Diagnostic("VUA3002")
-                .WithLocation(0)
-                .WithArguments("GetProtected", "protected methods (one line)", "private methods (multi line)");
-            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+            await Verify.VerifyAnalyzerAsync(test);
         }
 
         [Fact]

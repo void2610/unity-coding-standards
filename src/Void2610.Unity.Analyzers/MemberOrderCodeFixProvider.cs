@@ -159,20 +159,23 @@ namespace Void2610.Unity.Analyzers
                 : "\n";
 
             var changes = new List<TextChange>();
-            var openingBraceLine = syntaxTree.GetLineSpan(currentType.OpenBraceToken.Span).EndLinePosition.Line;
-            var firstMemberStartLine = MemberOrderAnalyzer.GetMemberAnchorLine(syntaxTree, sourceText, members[0]);
-            var blankLinesAfterOpeningBrace = firstMemberStartLine - openingBraceLine - 1;
-            if (blankLinesAfterOpeningBrace > 0 &&
-                openingBraceLine >= 0 &&
-                firstMemberStartLine >= 0 &&
-                openingBraceLine < sourceText.Lines.Count &&
-                firstMemberStartLine < sourceText.Lines.Count &&
-                openingBraceLine < firstMemberStartLine)
+            if (MemberOrderAnalyzer.ClassifyMember(members[0]) != MemberOrderAnalyzer.MemberCategory.Excluded)
             {
-                var replaceSpan = TextSpan.FromBounds(
-                    sourceText.Lines[openingBraceLine].End,
-                    sourceText.Lines[firstMemberStartLine].Start);
-                changes.Add(new TextChange(replaceSpan, lineBreak));
+                var openingBraceLine = syntaxTree.GetLineSpan(currentType.OpenBraceToken.Span).EndLinePosition.Line;
+                var firstMemberStartLine = MemberOrderAnalyzer.GetMemberAnchorLine(syntaxTree, sourceText, members[0]);
+                var blankLinesAfterOpeningBrace = firstMemberStartLine - openingBraceLine - 1;
+                if (blankLinesAfterOpeningBrace > 0 &&
+                    openingBraceLine >= 0 &&
+                    firstMemberStartLine >= 0 &&
+                    openingBraceLine < sourceText.Lines.Count &&
+                    firstMemberStartLine < sourceText.Lines.Count &&
+                    openingBraceLine < firstMemberStartLine)
+                {
+                    var replaceSpan = TextSpan.FromBounds(
+                        sourceText.Lines[openingBraceLine].End,
+                        sourceText.Lines[firstMemberStartLine].Start);
+                    changes.Add(new TextChange(replaceSpan, lineBreak));
+                }
             }
 
             for (var i = 1; i < members.Count; i++)

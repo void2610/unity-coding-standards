@@ -347,6 +347,27 @@ public class TestClass
         }
 
         [Fact]
+        public async Task MemberWithIfDirective_ExcludedFromOrdering_NoDiagnostic()
+        {
+            var test = @"
+#define UNITY_EDITOR
+
+public class TestClass
+{
+    public int Value() => 1;
+
+#if UNITY_EDITOR
+    private void DebugOnly()
+    {
+    }
+#endif
+
+    protected int GetProtected() => 1;
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
         public async Task ProtectedOneLineAfterProtectedMultiLine_VUA3002()
         {
             var test = @"
