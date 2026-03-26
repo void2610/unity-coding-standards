@@ -23,7 +23,6 @@ public class TestClass
             var fixedCode = @"
 public class TestClass
 {
-
     public int Value { get; set; }
     private int _count;
 }";
@@ -328,6 +327,28 @@ public class TestClass
             var expected = Verify.Diagnostic("VUA3003")
                 .WithLocation(0)
                 .WithArguments("_b");
+            await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
+        }
+
+        [Fact]
+        public async Task BlankLineAfterTypeOpeningBrace_Normalized()
+        {
+            var test = @"
+public class TestClass
+{
+
+    private int {|#0:_count|};
+}";
+
+            var fixedCode = @"
+public class TestClass
+{
+    private int _count;
+}";
+
+            var expected = Verify.Diagnostic("VUA3003")
+                .WithLocation(0)
+                .WithArguments("_count");
             await Verify.VerifyCodeFixAsync(test, expected, fixedCode);
         }
 

@@ -129,6 +129,24 @@ namespace Void2610.Unity.Analyzers
                 categorizedMembers.Add((member, category, name));
             }
 
+            var firstMember = typeDeclaration.Members[0];
+            var syntaxTree = context.Node.SyntaxTree;
+            var sourceText = syntaxTree.GetText(context.CancellationToken);
+            var openingBraceLine = syntaxTree.GetLineSpan(typeDeclaration.OpenBraceToken.Span).EndLinePosition.Line;
+            var firstMemberStartLine = GetMemberAnchorLine(syntaxTree, sourceText, firstMember);
+            var blankLinesAfterOpeningBrace = firstMemberStartLine - openingBraceLine - 1;
+            if (blankLinesAfterOpeningBrace > 0)
+            {
+                var location = firstMember is FieldDeclarationSyntax firstField
+                    ? firstField.Declaration.Variables.First().Identifier.GetLocation()
+                    : GetMemberIdentifierLocation(firstMember);
+
+                context.ReportDiagnostic(Diagnostic.Create(
+                    VUA3003,
+                    location,
+                    GetMemberName(firstMember)));
+            }
+
             if (categorizedMembers.Count <= 1)
                 return;
 
