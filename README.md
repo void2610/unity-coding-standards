@@ -35,15 +35,15 @@ dotnet build -c Release
 git submodule add <repository-url> unity-coding-standards
 ```
 
-2. プロジェクトルートに symlink を作成します:
+2. プロジェクトルートで初期化スクリプトを実行します:
 
 ```bash
-ln -s unity-coding-standards/config/.editorconfig .editorconfig
-ln -s unity-coding-standards/config/Directory.Build.props Directory.Build.props
-ln -s unity-coding-standards/config/FormatCheck.csproj FormatCheck.csproj
+./unity-coding-standards/scripts/init-unity-project.sh
 ```
 
-3. アナライザー DLL をビルドします:
+既存ファイルがあるプロジェクトの移行はこのスクリプトの対象外です。新規セットアップ専用です。
+
+3. 必要なら個別にアナライザー DLL をビルドします:
 
 ```bash
 dotnet build -c Release
@@ -52,16 +52,18 @@ dotnet build -c Release
 4. 共有規約を適用した状態で `dotnet format` を実行します:
 
 ```bash
-dotnet format analyzers FormatCheck.csproj --severity warn
-dotnet format whitespace FormatCheck.csproj
-dotnet format style FormatCheck.csproj --severity warn
+./unity-coding-standards/scripts/run-format.sh
 ```
+
+個別コマンドの実行漏れを防ぐため、LLM や自動化からは `run-format.sh` の利用を推奨します。
 
 ## 共有ファイル
 
 - `config/.editorconfig`: 命名規則、C# style、フォーマット設定
 - `config/Directory.Build.props`: Analyzer DLL の参照設定
 - `config/FormatCheck.csproj`: `dotnet format` 用の共有プロジェクト
+- `scripts/init-unity-project.sh`: 新規 Unity プロジェクト向け初期化スクリプト
+- `scripts/run-format.sh`: analyzers / whitespace / style をまとめて実行するスクリプト
 
 ## ルールの抑制
 
