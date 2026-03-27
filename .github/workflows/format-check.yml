@@ -1,0 +1,31 @@
+name: Shared Format Check
+
+on:
+  workflow_call:
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            7.0.x
+
+      - name: Build analyzer
+        run: dotnet build unity-coding-standards/src/Void2610.Unity.Analyzers/Void2610.Unity.Analyzers.csproj -c Release
+
+      - name: Run analyzer tests
+        run: dotnet test unity-coding-standards/tests/Void2610.Unity.Analyzers.Tests/Void2610.Unity.Analyzers.Tests.csproj -c Release --verbosity normal
+
+      - name: Check formatting
+        run: ./unity-coding-standards/scripts/run-format.sh --verify-no-changes

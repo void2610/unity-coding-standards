@@ -19,6 +19,7 @@ submodule at `./unity-coding-standards`.
 
 What it does:
   - creates symlinks for `.editorconfig`, `Directory.Build.props`, `FormatCheck.csproj`
+  - creates `.github/workflows/format-check.yml` for the shared reusable workflow
   - optionally builds the analyzer DLL
 
 Options:
@@ -76,6 +77,55 @@ build_analyzer_dll() {
     )
 }
 
+ensure_workflow_file() {
+    local workflow_dir=".github/workflows"
+    local workflow_path="${workflow_dir}/format-check.yml"
+    local expected_content
+    expected_content="$(cat <<'EOF'
+name: Format Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Assets/Scripts/**/*.cs'
+      - '.editorconfig'
+      - 'Directory.Build.props'
+      - 'FormatCheck.csproj'
+      - '.github/workflows/format-check.yml'
+      - '.gitmodules'
+      - 'unity-coding-standards'
+  pull_request:
+    paths:
+      - 'Assets/Scripts/**/*.cs'
+      - '.editorconfig'
+      - 'Directory.Build.props'
+      - 'FormatCheck.csproj'
+      - '.github/workflows/format-check.yml'
+      - '.gitmodules'
+      - 'unity-coding-standards'
+
+jobs:
+  format-check:
+    uses: void2610/unity-coding-standards/.github/workflows/format-check.yml@main
+EOF
+)"
+
+    if [[ -e "${workflow_path}" ]]; then
+        if [[ "$(cat "${workflow_path}")" == "${expected_content}" ]]; then
+            echo "skip: ${workflow_path} は既に共有 workflow caller です。"
+            return
+        fi
+
+        echo "error: ${workflow_path} が既に存在します。初期化専用スクリプトのため既存ファイルは上書きしません。" >&2
+        exit 1
+    fi
+
+    mkdir -p "${workflow_dir}"
+    printf '%s\n' "${expected_content}" > "${workflow_path}"
+    echo "created: ${workflow_path}"
+}
+
 main() {
     while (($# > 0)); do
         case "$1" in
@@ -100,6 +150,7 @@ main() {
     ensure_link_target ".editorconfig" "${SUBMODULE_DIR_NAME}/config/.editorconfig"
     ensure_link_target "Directory.Build.props" "${SUBMODULE_DIR_NAME}/config/Directory.Build.props"
     ensure_link_target "FormatCheck.csproj" "${SUBMODULE_DIR_NAME}/config/FormatCheck.csproj"
+    ensure_workflow_file
 
     if [[ "${build_analyzer}" == true ]]; then
         build_analyzer_dll
@@ -110,12 +161,11 @@ main() {
     cat <<'EOF'
 done:
   - shared config symlinks are ready
+  - GitHub Actions format-check workflow caller is ready
   - analyzer build step completed
 
 next:
-  dotnet format analyzers FormatCheck.csproj --severity warn
-  dotnet format whitespace FormatCheck.csproj
-  dotnet format style FormatCheck.csproj --severity warn
+  ./unity-coding-standards/scripts/run-format.sh
 EOF
 }
 

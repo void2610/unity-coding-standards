@@ -42,6 +42,7 @@ git submodule add <repository-url> unity-coding-standards
 ```
 
 既存ファイルがあるプロジェクトの移行はこのスクリプトの対象外です。新規セットアップ専用です。
+このスクリプトは `.editorconfig`、`Directory.Build.props`、`FormatCheck.csproj` の symlink に加えて、共有 reusable workflow を呼ぶ `.github/workflows/format-check.yml` も作成します。
 
 3. 必要なら個別にアナライザー DLL をビルドします:
 
@@ -56,14 +57,20 @@ dotnet build -c Release
 ```
 
 個別コマンドの実行漏れを防ぐため、LLM や自動化からは `run-format.sh` の利用を推奨します。
+CI では次のように検証モードで実行できます。
+
+```bash
+./unity-coding-standards/scripts/run-format.sh --verify-no-changes
+```
 
 ## 共有ファイル
 
 - `config/.editorconfig`: 命名規則、C# style、フォーマット設定
 - `config/Directory.Build.props`: Analyzer DLL の参照設定
 - `config/FormatCheck.csproj`: `dotnet format` 用の共有プロジェクト
+- `.github/workflows/format-check.yml`: 各 Unity プロジェクトから呼ばれる reusable workflow
 - `scripts/init-unity-project.sh`: 新規 Unity プロジェクト向け初期化スクリプト
-- `scripts/run-format.sh`: analyzers / whitespace / style をまとめて実行するスクリプト
+- `scripts/run-format.sh`: analyzers / whitespace / style をまとめて実行するスクリプト（CI 用の `--verify-no-changes` 対応）
 
 ## ルールの抑制
 
