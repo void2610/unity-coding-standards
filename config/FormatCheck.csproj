@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+    <!-- ビルドは不要、dotnet-formatによるフォーマットチェック専用 -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Assets/Scripts/**/*.cs" />
+    <!-- サブモジュール（シンボリックリンク先）を除外 -->
+    <Compile Remove="Assets/Scripts/SettingsSystem/**/*.cs" />
+    <Compile Remove="Assets/Scripts/Utils/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Analyzer Include="unity-coding-standards/src/Void2610.Unity.Analyzers/bin/Release/netstandard2.0/Void2610.Unity.Analyzers.dll"
+              Condition="Exists('unity-coding-standards/src/Void2610.Unity.Analyzers/bin/Release/netstandard2.0/Void2610.Unity.Analyzers.dll')" />
+  </ItemGroup>
+</Project>

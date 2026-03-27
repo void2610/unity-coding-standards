@@ -1,0 +1,8 @@
+<Project>
+    <ItemGroup>
+        <!-- unity-coding-standards のカスタムRoslynアナライザーを読み込む -->
+        <Analyzer
+            Include="$(MSBuildThisFileDirectory)unity-coding-standards/src/Void2610.Unity.Analyzers/bin/Release/netstandard2.0/Void2610.Unity.Analyzers.dll"
+            Condition="Exists('$(MSBuildThisFileDirectory)unity-coding-standards/src/Void2610.Unity.Analyzers/bin/Release/netstandard2.0/Void2610.Unity.Analyzers.dll')" />
+    </ItemGroup>
+</Project>

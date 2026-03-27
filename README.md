@@ -1,7 +1,7 @@
-# Void2610.Unity.Analyzers
+# unity-coding-standards
 
-Unity プロジェクト向けのカスタム Roslyn アナライザー集です。
-プロジェクト固有のコーディング規約をコンパイル時に自動検証します。
+Unity プロジェクト向けの共有コーディング規約リポジトリです。
+カスタム Roslyn アナライザー、`.editorconfig`、`Directory.Build.props`、`FormatCheck.csproj` をまとめて配布します。
 
 ## ルール一覧
 
@@ -32,10 +32,36 @@ dotnet build -c Release
 1. このリポジトリを Git サブモジュールとして追加します:
 
 ```bash
-git submodule add <repository-url> Assets/Plugins/Analyzers/unity-analyzers
+git submodule add <repository-url> unity-coding-standards
 ```
 
-2. ビルドした DLL を Unity プロジェクトの適切なフォルダに配置し、`.csproj` の `Analyzer` として参照します。
+2. プロジェクトルートに symlink を作成します:
+
+```bash
+ln -s unity-coding-standards/config/.editorconfig .editorconfig
+ln -s unity-coding-standards/config/Directory.Build.props Directory.Build.props
+ln -s unity-coding-standards/config/FormatCheck.csproj FormatCheck.csproj
+```
+
+3. アナライザー DLL をビルドします:
+
+```bash
+dotnet build -c Release
+```
+
+4. 共有規約を適用した状態で `dotnet format` を実行します:
+
+```bash
+dotnet format analyzers FormatCheck.csproj --severity warn
+dotnet format whitespace FormatCheck.csproj
+dotnet format style FormatCheck.csproj --severity warn
+```
+
+## 共有ファイル
+
+- `config/.editorconfig`: 命名規則、C# style、フォーマット設定
+- `config/Directory.Build.props`: Analyzer DLL の参照設定
+- `config/FormatCheck.csproj`: `dotnet format` 用の共有プロジェクト
 
 ## ルールの抑制
 
