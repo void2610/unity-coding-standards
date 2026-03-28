@@ -27,5 +27,15 @@ jobs:
       - name: Run analyzer tests
         run: dotnet test unity-coding-standards/tests/Void2610.Unity.Analyzers.Tests/Void2610.Unity.Analyzers.Tests.csproj -c Release --verbosity normal
 
+      - name: Print format diagnostics
+        run: |
+          echo "pwd: $(pwd)"
+          uname -a
+          dotnet --version
+          dotnet --info
+          dotnet format --version
+          dotnet msbuild FormatCheck.csproj -nologo -getProperty:NETCoreSdkVersion
+          rg -n "dotnet_style_require_accessibility_modifiers" .editorconfig unity-coding-standards/config/.editorconfig
+
       - name: Check formatting
         run: ./unity-coding-standards/scripts/run-format.sh --verify-no-changes
