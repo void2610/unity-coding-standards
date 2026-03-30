@@ -18,7 +18,7 @@ Run this from the Unity project root after adding the `unity-coding-standards`
 submodule at `./unity-coding-standards`.
 
 What it does:
-  - creates symlinks for `.editorconfig`, `Directory.Build.props`, `FormatCheck.csproj`
+  - creates symlinks for `.editorconfig`, `Directory.Build.props`, `Directory.Build.targets`, `FormatCheck.csproj`
   - creates `.github/workflows/format-check.yml` for the shared reusable workflow
   - optionally builds the analyzer DLL
 
@@ -91,6 +91,7 @@ on:
       - 'Assets/Scripts/**/*.cs'
       - '.editorconfig'
       - 'Directory.Build.props'
+      - 'Directory.Build.targets'
       - 'FormatCheck.csproj'
       - '.github/workflows/format-check.yml'
       - '.gitmodules'
@@ -100,6 +101,7 @@ on:
       - 'Assets/Scripts/**/*.cs'
       - '.editorconfig'
       - 'Directory.Build.props'
+      - 'Directory.Build.targets'
       - 'FormatCheck.csproj'
       - '.github/workflows/format-check.yml'
       - '.gitmodules'
@@ -150,6 +152,7 @@ main() {
 
     ensure_link_target ".editorconfig" "${SUBMODULE_DIR_NAME}/config/.editorconfig"
     ensure_link_target "Directory.Build.props" "${SUBMODULE_DIR_NAME}/config/Directory.Build.props"
+    ensure_link_target "Directory.Build.targets" "${SUBMODULE_DIR_NAME}/config/Directory.Build.targets"
     ensure_link_target "FormatCheck.csproj" "${SUBMODULE_DIR_NAME}/config/FormatCheck.csproj"
     ensure_workflow_file
 

@@ -1,7 +1,7 @@
 # unity-coding-standards
 
 Unity プロジェクト向けの共有コーディング規約リポジトリです。
-カスタム Roslyn アナライザー、`.editorconfig`、`Directory.Build.props`、`FormatCheck.csproj` をまとめて配布します。
+カスタム Roslyn アナライザー、`.editorconfig`、`Directory.Build.props`、`Directory.Build.targets`、`FormatCheck.csproj` をまとめて配布します。
 
 ## ルール一覧
 
@@ -42,7 +42,7 @@ git submodule add <repository-url> unity-coding-standards
 ```
 
 既存ファイルがあるプロジェクトの移行はこのスクリプトの対象外です。新規セットアップ専用です。
-このスクリプトは `.editorconfig`、`Directory.Build.props`、`FormatCheck.csproj` の symlink に加えて、共有 reusable workflow を呼ぶ `.github/workflows/format-check.yml` も作成します。
+このスクリプトは `.editorconfig`、`Directory.Build.props`、`Directory.Build.targets`、`FormatCheck.csproj` の symlink に加えて、共有 reusable workflow を呼ぶ `.github/workflows/format-check.yml` も作成します。
 
 3. 必要なら個別にアナライザー DLL をビルドします:
 
@@ -67,6 +67,7 @@ CI では次のように検証モードで実行できます。
 
 - `config/.editorconfig`: 命名規則、C# style、フォーマット設定
 - `config/Directory.Build.props`: Analyzer DLL の参照設定
+- `config/Directory.Build.targets`: Rider / MSBuild 向けの C# 言語バージョン最終上書き
 - `config/FormatCheck.csproj`: `dotnet format` 用の共有プロジェクト
 - `.github/workflows/format-check.yml`: 各 Unity プロジェクトから呼ばれる reusable workflow
 - `scripts/init-unity-project.sh`: 新規 Unity プロジェクト向け初期化スクリプト
