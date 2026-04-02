@@ -120,11 +120,19 @@ dotnet_naming_rule.private_fields_should_be_camel_case.symbols = private_fields
 dotnet_naming_rule.private_fields_should_be_camel_case.style = private_field_style
 
 dotnet_naming_symbols.private_fields.applicable_kinds = field
-dotnet_naming_symbols.private_fields.applicable_accessibilities = private, protected, private_protected
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, private_protected
 dotnet_naming_symbols.private_fields.required_modifiers =
 
 dotnet_naming_style.private_field_style.capitalization = camel_case
 dotnet_naming_style.private_field_style.required_prefix = _
+
+# protectedフィールド: PascalCase
+dotnet_naming_rule.protected_fields_should_be_pascal_case.severity = warning
+dotnet_naming_rule.protected_fields_should_be_pascal_case.symbols = protected_fields
+dotnet_naming_rule.protected_fields_should_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.protected_fields.applicable_kinds = field
+dotnet_naming_symbols.protected_fields.applicable_accessibilities = protected
 
 # パブリックメンバー: PascalCase
 dotnet_naming_rule.public_members_should_be_pascal_case.severity = warning
