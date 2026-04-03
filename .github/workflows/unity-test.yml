@@ -124,7 +124,7 @@ jobs:
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;');
 
-              const testCases = Array.from(xml.matchAll(/<test-case\b[^>]*name="([^"]+)"[^>]*result="([^"]+)"[^>]*\/>/g))
+              const testCases = Array.from(xml.matchAll(/<test-case\b[^>]*name="([^"]+)"[^>]*result="([^"]+)"[^>]*>/g))
                 .map((match) => {
                   const [, name, result] = match;
                   return `- [${result}] ${escapeHtml(name)}`;
