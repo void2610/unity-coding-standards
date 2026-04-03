@@ -15,7 +15,7 @@ namespace Void2610.Unity.Analyzers
     public sealed class SerializeFieldNamingCodeFixProvider : CodeFixProvider
     {
         public override ImmutableArray<string> FixableDiagnosticIds =>
-            ImmutableArray.Create("VUA2001", "VUA2002");
+            ImmutableArray.Create("VUA2001", "VUA2002", "VUA2003", "VUA2004");
 
         public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -35,15 +35,27 @@ namespace Void2610.Unity.Analyzers
 
             if (diagnostic.Id == "VUA2001")
             {
-                // [SerializeField]フィールド: _プレフィックス除去
+                // [SerializeField]privateフィールド: _プレフィックス除去
                 newName = oldName.TrimStart('_');
                 title = $"'_' プレフィックスを除去して '{newName}' にリネーム";
             }
-            else
+            else if (diagnostic.Id == "VUA2002")
             {
                 // 通常privateフィールド: _プレフィックス追加
                 newName = "_" + oldName;
                 title = $"'_' プレフィックスを追加して '{newName}' にリネーム";
+            }
+            else if (diagnostic.Id == "VUA2003")
+            {
+                // [SerializeField]protected/publicフィールド: 先頭を小文字に変換
+                newName = char.ToLower(oldName[0]) + oldName.Substring(1);
+                title = $"キャメルケース '{newName}' にリネーム";
+            }
+            else
+            {
+                // 通常protectedフィールド: 先頭を大文字に変換
+                newName = char.ToUpper(oldName[0]) + oldName.Substring(1);
+                title = $"パスカルケース '{newName}' にリネーム";
             }
 
             context.RegisterCodeFix(

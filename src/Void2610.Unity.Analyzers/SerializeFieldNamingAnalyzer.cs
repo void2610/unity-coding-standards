@@ -26,8 +26,26 @@ namespace Void2610.Unity.Analyzers
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);
 
+        // [SerializeField]付きprotected/publicフィールドがキャメルケースでない場合の警告
+        public static readonly DiagnosticDescriptor VUA2003 = new DiagnosticDescriptor(
+            "VUA2003",
+            "[SerializeField]フィールドはキャメルケースにしてください",
+            "[SerializeField]フィールド '{0}' はキャメルケース（先頭小文字）にしてください",
+            "Naming",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        // 非[SerializeField]のprotectedフィールドがパスカルケースでない場合の警告
+        public static readonly DiagnosticDescriptor VUA2004 = new DiagnosticDescriptor(
+            "VUA2004",
+            "protectedフィールドはパスカルケースにしてください",
+            "protectedフィールド '{0}' はパスカルケース（先頭大文字）にしてください",
+            "Naming",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-            ImmutableArray.Create(VUA2002, VUA2001);
+            ImmutableArray.Create(VUA2002, VUA2001, VUA2003, VUA2004);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -41,10 +59,6 @@ namespace Void2610.Unity.Analyzers
             if (GeneratedCodeHelper.IsGenerated(context.Symbol)) return;
             var field = (IFieldSymbol)context.Symbol;
 
-            // privateフィールドのみ対象
-            if (field.DeclaredAccessibility != Accessibility.Private)
-                return;
-
             // const, static, コンパイラ生成フィールドは除外
             if (field.IsConst || field.IsStatic || field.IsImplicitlyDeclared)
                 return;
@@ -53,24 +67,51 @@ namespace Void2610.Unity.Analyzers
                 a.AttributeClass?.Name is "SerializeField" or "SerializeFieldAttribute"
                     or "SerializeReference" or "SerializeReferenceAttribute");
 
-            var startsWithUnderscore = field.Name.StartsWith("_");
-
-            if (hasSerializeField)
+            if (field.DeclaredAccessibility == Accessibility.Private)
             {
-                // [SerializeField]付き → _プレフィックス不要
-                if (startsWithUnderscore)
+                // privateフィールドの命名チェック
+                var startsWithUnderscore = field.Name.StartsWith("_");
+
+                if (hasSerializeField)
                 {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(VUA2001, field.Locations[0], field.Name));
+                    // [SerializeField]付き → _プレフィックス不要
+                    if (startsWithUnderscore)
+                    {
+                        context.ReportDiagnostic(
+                            Diagnostic.Create(VUA2001, field.Locations[0], field.Name));
+                    }
+                }
+                else
+                {
+                    // 通常のprivateフィールド → _プレフィックス必須
+                    if (!startsWithUnderscore)
+                    {
+                        context.ReportDiagnostic(
+                            Diagnostic.Create(VUA2002, field.Locations[0], field.Name));
+                    }
                 }
             }
-            else
+            else if (field.DeclaredAccessibility == Accessibility.Protected
+                  || field.DeclaredAccessibility == Accessibility.ProtectedOrInternal)
             {
-                // 通常のprivateフィールド → _プレフィックス必須
-                if (!startsWithUnderscore)
+                // protectedフィールドの命名チェック
+                if (hasSerializeField)
                 {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(VUA2002, field.Locations[0], field.Name));
+                    // [SerializeField]付き → キャメルケース必須（先頭小文字）
+                    if (field.Name.Length > 0 && char.IsUpper(field.Name[0]))
+                    {
+                        context.ReportDiagnostic(
+                            Diagnostic.Create(VUA2003, field.Locations[0], field.Name));
+                    }
+                }
+                else
+                {
+                    // 通常のprotectedフィールド → パスカルケース必須（先頭大文字）
+                    if (field.Name.Length > 0 && char.IsLower(field.Name[0]))
+                    {
+                        context.ReportDiagnostic(
+                            Diagnostic.Create(VUA2004, field.Locations[0], field.Name));
+                    }
                 }
             }
         }
