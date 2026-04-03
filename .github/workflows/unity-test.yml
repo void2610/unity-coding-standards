@@ -95,6 +95,7 @@ jobs:
             const resultFile = xmlFiles.find((file) => fs.readFileSync(file, 'utf8').includes('<test-run'));
 
             let summary = 'テスト結果ファイルが見つかりませんでした。';
+            let detailsSection = '';
             if (resultFile) {
               const xml = fs.readFileSync(resultFile, 'utf8');
               const readAttr = (name) => {
@@ -111,6 +112,28 @@ jobs:
               const durationText = duration ? `, duration=${duration}s` : '';
 
               summary = `${testMode} tests: ${passed}/${total} passed, failed=${failed}, skipped=${skipped}, inconclusive=${inconclusive}${durationText}`;
+
+              const escapeHtml = (value) => value
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+
+              const testCases = Array.from(xml.matchAll(/<test-case\b[^>]*name="([^"]+)"[^>]*result="([^"]+)"[^>]*\/>/g))
+                .map((match) => {
+                  const [, name, result] = match;
+                  return `- [${result}] ${escapeHtml(name)}`;
+                });
+
+              if (testCases.length > 0) {
+                detailsSection = [
+                  '',
+                  `<details><summary>All tests (${testCases.length})</summary>`,
+                  '',
+                  ...testCases,
+                  '',
+                  '</details>',
+                ].join('\n');
+              }
             }
 
             const body = [
@@ -118,6 +141,7 @@ jobs:
               `## Unity ${testMode} Test Results`,
               '',
               summary,
+              detailsSection,
             ].join('\n');
 
             const { owner, repo } = context.repo;
