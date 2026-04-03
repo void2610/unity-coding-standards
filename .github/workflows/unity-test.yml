@@ -124,11 +124,36 @@ jobs:
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;');
 
-              const testCases = Array.from(xml.matchAll(/<test-case\b[^>]*name="([^"]+)"[^>]*result="([^"]+)"[^>]*>/g))
+              const resultIcon = (result) => {
+                switch (result) {
+                  case 'Passed':
+                    return '✅';
+                  case 'Failed':
+                    return '❌';
+                  case 'Skipped':
+                    return '⏭️';
+                  case 'Inconclusive':
+                    return '❔';
+                  default:
+                    return '•';
+                }
+              };
+
+              const testCases = Array.from(xml.matchAll(/<test-case\b([^>]*)>/g))
                 .map((match) => {
-                  const [, name, result] = match;
-                  return `- [${result}] ${escapeHtml(name)}`;
-                });
+                  const attrs = match[1];
+                  const name = attrs.match(/\bname="([^"]+)"/)?.[1];
+                  const fullName = attrs.match(/\bfullname="([^"]+)"/)?.[1];
+                  const result = attrs.match(/\bresult="([^"]+)"/)?.[1];
+
+                  if (!name || !result) {
+                    return null;
+                  }
+
+                  const displayName = fullName ?? name;
+                  return `- ${resultIcon(result)} ${escapeHtml(displayName)}`;
+                })
+                .filter(Boolean);
 
               if (testCases.length > 0) {
                 detailsSection = [
