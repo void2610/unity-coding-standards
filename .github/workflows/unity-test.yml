@@ -18,6 +18,10 @@ on:
         required: false
         type: string
         default: test-results
+      pr-number:
+        required: false
+        type: number
+        default: 0
 
 jobs:
   test:
@@ -66,11 +70,12 @@ jobs:
           path: ${{ steps.tests.outputs.artifactsPath || 'artifacts' }}
 
       - name: Comment test results on PR
-        if: ${{ always() && github.event_name == 'pull_request' }}
+        if: ${{ always() && inputs.pr-number > 0 }}
         uses: actions/github-script@v7
         env:
           ARTIFACTS_PATH: ${{ steps.tests.outputs.artifactsPath || 'artifacts' }}
           TEST_MODE: ${{ inputs.test-mode }}
+          PR_NUMBER: ${{ inputs.pr-number }}
         with:
           script: |
             const fs = require('fs');
@@ -79,6 +84,7 @@ jobs:
             const marker = '<!-- unity-editmode-test-results -->';
             const artifactsPath = process.env.ARTIFACTS_PATH || 'artifacts';
             const testMode = process.env.TEST_MODE || 'editMode';
+            const issue_number = Number(process.env.PR_NUMBER);
 
             function getAllFiles(dir) {
               if (!fs.existsSync(dir)) {
@@ -145,7 +151,6 @@ jobs:
             ].join('\n');
 
             const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
               repo,
