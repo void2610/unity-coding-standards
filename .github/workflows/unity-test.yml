@@ -1,0 +1,148 @@
+name: Shared Unity Test
+
+on:
+  workflow_call:
+    inputs:
+      job-name:
+        required: false
+        type: string
+        default: EditMode テスト
+      test-mode:
+        required: false
+        type: string
+        default: editMode
+      unity-version:
+        required: true
+        type: string
+      artifact-name:
+        required: false
+        type: string
+        default: test-results
+
+jobs:
+  test:
+    name: ${{ inputs.job-name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+          docker system prune --all --force
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ runner.os }}-
+
+      - name: Run Unity tests
+        id: tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          testMode: ${{ inputs.test-mode }}
+          unityVersion: ${{ inputs.unity-version }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ steps.tests.outputs.artifactsPath || 'artifacts' }}
+
+      - name: Comment test results on PR
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          ARTIFACTS_PATH: ${{ steps.tests.outputs.artifactsPath || 'artifacts' }}
+          TEST_MODE: ${{ inputs.test-mode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const marker = '<!-- unity-editmode-test-results -->';
+            const artifactsPath = process.env.ARTIFACTS_PATH || 'artifacts';
+            const testMode = process.env.TEST_MODE || 'editMode';
+
+            function getAllFiles(dir) {
+              if (!fs.existsSync(dir)) {
+                return [];
+              }
+
+              return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+                const fullPath = path.join(dir, entry.name);
+                return entry.isDirectory() ? getAllFiles(fullPath) : [fullPath];
+              });
+            }
+
+            const xmlFiles = getAllFiles(artifactsPath).filter((file) => file.endsWith('.xml'));
+            const resultFile = xmlFiles.find((file) => fs.readFileSync(file, 'utf8').includes('<test-run'));
+
+            let summary = 'テスト結果ファイルが見つかりませんでした。';
+            if (resultFile) {
+              const xml = fs.readFileSync(resultFile, 'utf8');
+              const readAttr = (name) => {
+                const match = xml.match(new RegExp(`${name}="([^"]+)"`));
+                return match ? match[1] : null;
+              };
+
+              const total = readAttr('total') ?? readAttr('testcasecount') ?? '0';
+              const passed = readAttr('passed') ?? '0';
+              const failed = readAttr('failed') ?? '0';
+              const skipped = readAttr('skipped') ?? '0';
+              const inconclusive = readAttr('inconclusive') ?? '0';
+              const duration = readAttr('duration');
+              const durationText = duration ? `, duration=${duration}s` : '';
+
+              summary = `${testMode} tests: ${passed}/${total} passed, failed=${failed}, skipped=${skipped}, inconclusive=${inconclusive}${durationText}`;
+            }
+
+            const body = [
+              marker,
+              `## Unity ${testMode} Test Results`,
+              '',
+              summary,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
