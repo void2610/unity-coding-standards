@@ -91,6 +91,19 @@ jobs:
             -executeMethod "${{ inputs.nuget-restore-method }}" \
             -logFile -
 
+      - name: Recompile after NuGet restore
+        if: inputs.nuget-restore-method != ''
+        run: |
+          # NuGet 復元で配置された DLL を反映するため、プロジェクトを再度開いて
+          # Domain Reload と再コンパイルを実行する。
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -logFile -
+
       - name: Build project
         run: |
           # パッケージ解決済みの状態でビルドを実行する。
