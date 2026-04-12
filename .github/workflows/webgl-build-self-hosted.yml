@@ -36,10 +36,6 @@ on:
         type: string
         default: Assets/packages.config
 
-permissions:
-  contents: write
-  pages: write
-
 jobs:
   build:
     name: Build WebGL
