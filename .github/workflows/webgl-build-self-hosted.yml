@@ -42,6 +42,8 @@ on:
     secrets:
       SOPS_AGE_KEY:
         required: true
+      DISCORD_WEBHOOK_URL:
+        required: false
 
 jobs:
   build:
@@ -84,3 +86,37 @@ jobs:
           npx wrangler pages deploy "${UNITY_BUILD_OUTPUT_PATH}" \
             --project-name="${{ inputs.cloudflare-project-name }}" \
             --branch="${{ inputs.deploy-branch }}"
+
+      - name: Notify Discord
+        if: secrets.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          DEPLOY_URL: "https://${{ inputs.cloudflare-project-name }}.pages.dev/"
+        run: |
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
+          REPO_URL="https://github.com/${REPOSITORY}"
+
+          PAYLOAD=$(python3 <<PY
+          import json, os
+          print(json.dumps({
+              "embeds": [{
+                  "title": "WebGL Build Deployed",
+                  "url": os.environ["DEPLOY_URL"],
+                  "description": os.environ.get("COMMIT_MSG", ""),
+                  "color": 3447003,
+                  "fields": [
+                      {"name": "Preview", "value": os.environ["DEPLOY_URL"], "inline": False},
+                      {"name": "Repository", "value": f"[{os.environ['REPOSITORY']}]({os.environ['REPO_URL']})", "inline": False},
+                      {"name": "Commit", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True},
+                      {"name": "Author", "value": "$(git log -1 --format='%an')", "inline": True}
+                  ]
+              }]
+          }))
+          PY
+          )
+
+          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
