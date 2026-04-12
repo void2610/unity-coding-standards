@@ -79,9 +79,14 @@ jobs:
         run: |
           # NuGet for Unity のパッケージ (R3 コア等) は Assets/Packages/ に配置されるが
           # .gitignore で除外されているため、CI 環境では毎回復元が必要。
-          # -ignoreCompilerErrors を付けることで、NuGet パッケージ不在による
-          # コンパイルエラーがあっても復元処理を最後まで実行させる。
+          # 手順:
+          #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する
+          #   2. 復元した DLL を反映するため再度 Unity を起動して再コンパイルする
+          #      (Library キャッシュが古い場合に初回コンパイルが失敗するため
+          #       2回目も -ignoreCompilerErrors を付ける)
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+
+          echo "::group::NuGet restore"
           "$UNITY_PATH" \
             -batchmode \
             -quit \
@@ -90,19 +95,17 @@ jobs:
             -projectPath "$GITHUB_WORKSPACE" \
             -executeMethod "${{ inputs.nuget-restore-method }}" \
             -logFile -
+          echo "::endgroup::"
 
-      - name: Recompile after NuGet restore
-        if: inputs.nuget-restore-method != ''
-        run: |
-          # NuGet 復元で配置された DLL を反映するため、プロジェクトを再度開いて
-          # Domain Reload と再コンパイルを実行する。
-          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          echo "::group::Recompile after restore"
           "$UNITY_PATH" \
             -batchmode \
             -quit \
             -nographics \
+            -ignoreCompilerErrors \
             -projectPath "$GITHUB_WORKSPACE" \
             -logFile -
+          echo "::endgroup::"
 
       - name: Build project
         run: |
