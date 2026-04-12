@@ -25,6 +25,9 @@ runs:
         lfs: true
         submodules: recursive
         fetch-depth: 1
+        # セルフホストランナーでは Library/ や Assets/Packages/ 等の
+        # git 管理外ファイルをビルドキャッシュとして保持するため clean を無効にする。
+        clean: false
 
     - name: Verify Unity installation
       shell: bash
