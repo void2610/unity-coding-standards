@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       runner-labels:
-        description: self-hosted runner のラベル配列（JSON 形式、例: '["self-hosted","macos"]'）
+        description: "self-hosted runner のラベル配列（JSON 形式、例: [\"self-hosted\",\"macos\"]）"
         required: true
         type: string
       build-output-path:
