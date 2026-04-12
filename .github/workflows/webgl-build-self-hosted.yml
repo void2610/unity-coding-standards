@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       execute-method:
-        description: -executeMethod に渡すビルドメソッドの完全修飾名
+        description: "-executeMethod に渡すビルドメソッドの完全修飾名"
         required: true
         type: string
       runner-labels:
@@ -16,15 +16,19 @@ on:
         required: true
         type: string
       build-output-path:
-        description: ビルド成果物の出力先パス
+        description: "ビルド成果物の出力先パス"
         required: false
         type: string
         default: CIBuilds/WebGL/build
+      cloudflare-project-name:
+        description: "Cloudflare Pages のプロジェクト名"
+        required: true
+        type: string
       deploy-branch:
-        description: デプロイ先のブランチ名
+        description: "Cloudflare Pages のデプロイブランチ（main で本番、それ以外でプレビュー）"
         required: false
         type: string
-        default: gh-pages
+        default: main
       nuget-restore-method:
         description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
         required: false
@@ -35,6 +39,11 @@ on:
         required: false
         type: string
         default: Assets/packages.config
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -63,16 +72,11 @@ jobs:
             -executeMethod "${{ inputs.execute-method }}" \
             -logFile -
 
-      - name: Prepare artifact for deployment
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          rm -rf public
-          cp -R "${UNITY_BUILD_OUTPUT_PATH}" public
-
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: public
-          publish_branch: ${{ inputs.deploy-branch }}
-          keep_files: false
-
+          npx wrangler pages deploy "${UNITY_BUILD_OUTPUT_PATH}" \
+            --project-name="${{ inputs.cloudflare-project-name }}" \
+            --branch="${{ inputs.deploy-branch }}"
