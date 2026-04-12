@@ -53,17 +53,6 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: |
-            Library
-            Temp/UnityLockfile
-          key: Library-${{ runner.os }}-webgl-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}-${{ hashFiles('**/*.meta') }}
-          restore-keys: |
-            Library-${{ runner.os }}-webgl-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}-
-            Library-${{ runner.os }}-webgl-
-
       - name: Verify Unity installation
         run: |
           # self-hosted runner では Unity を action が配ってくれないため、実機の導入状態を先に検証する。

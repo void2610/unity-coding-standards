@@ -49,14 +49,6 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-${{ runner.os }}-
-
       - name: Verify Unity installation
         run: |
           # self-hosted runner では Unity を action が配ってくれないため、実機の導入状態を先に検証する。
