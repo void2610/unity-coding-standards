@@ -66,8 +66,7 @@ jobs:
       - name: Prepare artifact for deployment
         run: |
           rm -rf public
-          mkdir -p public
-          rsync -a --delete "${UNITY_BUILD_OUTPUT_PATH}/" public/
+          cp -R "${UNITY_BUILD_OUTPUT_PATH}" public
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
