@@ -97,25 +97,23 @@ jobs:
           SHORT_SHA="${COMMIT_SHA:0:7}"
           COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
           COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
+          AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA")
           REPO_URL="https://github.com/${REPOSITORY}"
 
-          PAYLOAD=$(python3 <<PY
-          import json, os
-          print(json.dumps({
-              "embeds": [{
-                  "title": "WebGL Build Deployed",
-                  "url": os.environ["DEPLOY_URL"],
-                  "description": os.environ.get("COMMIT_MSG", ""),
-                  "color": 3447003,
-                  "fields": [
-                      {"name": "Preview", "value": os.environ["DEPLOY_URL"], "inline": False},
-                      {"name": "Repository", "value": f"[{os.environ['REPOSITORY']}]({os.environ['REPO_URL']})", "inline": False},
-                      {"name": "Commit", "value": f"[{os.environ['SHORT_SHA']}]({os.environ['COMMIT_URL']})", "inline": True},
-                      {"name": "Author", "value": "$(git log -1 --format='%an')", "inline": True}
-                  ]
-              }]
-          }))
-          PY
-          )
+          # jq でエスケープ付き JSON を安全に組み立てる。
+          PAYLOAD=$(jq -n \
+            --arg title "WebGL Build Deployed" \
+            --arg url "$DEPLOY_URL" \
+            --arg desc "$COMMIT_MSG" \
+            --arg preview "$DEPLOY_URL" \
+            --arg repo "[$REPOSITORY]($REPO_URL)" \
+            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg author "$AUTHOR" \
+            '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
+              {name: "Preview", value: $preview, inline: false},
+              {name: "Repository", value: $repo, inline: false},
+              {name: "Commit", value: $commit, inline: true},
+              {name: "Author", value: $author, inline: true}
+            ]}]}')
 
           curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
