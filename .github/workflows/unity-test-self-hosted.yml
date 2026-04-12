@@ -62,17 +62,20 @@ jobs:
           fi
           "$UNITY_PATH" -version
 
-      - name: Resolve packages
+      - name: Restore NuGet packages
         run: |
-          # NuGet for Unity 等のパッケージ復元は Unity Editor の起動時に自動実行される。
-          # -runTests だけでは復元が完了しないまま走ることがあるため、先にプロジェクトを開いて
-          # パッケージ解決とコンパイルを済ませてから終了する。
+          # NuGet for Unity のパッケージ (R3 コア等) は Assets/Packages/ に配置されるが
+          # .gitignore で除外されているため、CI 環境では毎回復元が必要。
+          # -ignoreCompilerErrors を付けることで、NuGet パッケージ不在による
+          # コンパイルエラーがあっても復元処理を最後まで実行させる。
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
           "$UNITY_PATH" \
             -batchmode \
             -quit \
             -nographics \
+            -ignoreCompilerErrors \
             -projectPath "$GITHUB_WORKSPACE" \
+            -executeMethod NugetForUnity.NugetHelper.Restore \
             -logFile -
 
       - name: Run Unity tests
