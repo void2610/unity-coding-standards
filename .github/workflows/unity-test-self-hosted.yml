@@ -27,6 +27,11 @@ on:
         required: false
         type: number
         default: 0
+      nuget-restore-method:
+        description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列で復元ステップをスキップ）"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -63,6 +68,7 @@ jobs:
           "$UNITY_PATH" -version
 
       - name: Restore NuGet packages
+        if: inputs.nuget-restore-method != ''
         run: |
           # NuGet for Unity のパッケージ (R3 コア等) は Assets/Packages/ に配置されるが
           # .gitignore で除外されているため、CI 環境では毎回復元が必要。
@@ -75,7 +81,7 @@ jobs:
             -nographics \
             -ignoreCompilerErrors \
             -projectPath "$GITHUB_WORKSPACE" \
-            -executeMethod NugetForUnity.NugetHelper.Restore \
+            -executeMethod "${{ inputs.nuget-restore-method }}" \
             -logFile -
 
       - name: Run Unity tests
