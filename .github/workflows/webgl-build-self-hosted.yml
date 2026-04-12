@@ -1,0 +1,103 @@
+name: Shared WebGL Build (Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      unity-version:
+        description: Unity Editor のバージョン（例: 6000.3.10f1）
+        required: true
+        type: string
+      execute-method:
+        description: -executeMethod に渡すビルドメソッドの完全修飾名
+        required: true
+        type: string
+      runner-labels:
+        description: self-hosted runner のラベル配列（JSON 形式、例: '["self-hosted","macos"]'）
+        required: true
+        type: string
+      build-output-path:
+        description: ビルド成果物の出力先パス
+        required: false
+        type: string
+        default: CIBuilds/WebGL/build
+      deploy-branch:
+        description: デプロイ先のブランチ名
+        required: false
+        type: string
+        default: gh-pages
+
+permissions:
+  # gh-pages への配布でリポジトリ内容を書き換えるため write を許可する。
+  contents: write
+  # GitHub Pages 用 artifact の発行に必要なため write を許可する。
+  pages: write
+
+jobs:
+  build:
+    name: Build WebGL
+    # 呼び出し側が指定したラベル配列で runner を選択する。
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    env:
+      UNITY_VERSION: ${{ inputs.unity-version }}
+      UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: |
+            Library
+            Temp/UnityLockfile
+          key: Library-${{ runner.os }}-webgl-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}-${{ hashFiles('**/*.meta') }}
+          restore-keys: |
+            Library-${{ runner.os }}-webgl-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}-
+            Library-${{ runner.os }}-webgl-
+
+      - name: Verify Unity installation
+        run: |
+          # self-hosted runner では Unity を action が配ってくれないため、実機の導入状態を先に検証する。
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          if [ ! -x "$UNITY_PATH" ]; then
+            echo "Unity not found at $UNITY_PATH" >&2
+            exit 1
+          fi
+          "$UNITY_PATH" -version
+
+      - name: Build project
+        run: |
+          # Docker ベースの game-ci ではなく、ローカル Unity CLI を直接叩いて self-hosted runner 上でビルドする。
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget WebGL \
+            -executeMethod "${{ inputs.execute-method }}" \
+            -logFile -
+
+      - name: Prepare artifact for deployment
+        run: |
+          # Pages 配布側が読む public ディレクトリへ build 出力を集約する。
+          rm -rf public
+          mkdir -p public
+          rsync -a --delete "${UNITY_BUILD_OUTPUT_PATH}/" public/
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public
+          publish_branch: ${{ inputs.deploy-branch }}
+          keep_files: false
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
