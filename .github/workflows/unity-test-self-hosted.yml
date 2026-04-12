@@ -62,9 +62,22 @@ jobs:
           fi
           "$UNITY_PATH" -version
 
+      - name: Resolve packages
+        run: |
+          # NuGet for Unity 等のパッケージ復元は Unity Editor の起動時に自動実行される。
+          # -runTests だけでは復元が完了しないまま走ることがあるため、先にプロジェクトを開いて
+          # パッケージ解決とコンパイルを済ませてから終了する。
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -logFile -
+
       - name: Run Unity tests
         run: |
-          # game-ci ではなくローカル Unity CLI を直接叩いてテストを実行する。
+          # パッケージ解決済みの状態でテストを実行する。
           # -runTests は終了コード 0=成功, 2=テスト失敗, それ以外=エラー として返す。
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
           mkdir -p "$(dirname "$TEST_RESULTS_PATH")"

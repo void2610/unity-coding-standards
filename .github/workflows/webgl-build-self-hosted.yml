@@ -69,9 +69,21 @@ jobs:
           fi
           "$UNITY_PATH" -version
 
+      - name: Resolve packages
+        run: |
+          # NuGet for Unity 等のパッケージ復元は Unity Editor の起動時に自動実行される。
+          # ビルド本体の前にプロジェクトを一度開いてパッケージ解決とコンパイルを済ませておく。
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -logFile -
+
       - name: Build project
         run: |
-          # Docker ベースの game-ci ではなく、ローカル Unity CLI を直接叩いて self-hosted runner 上でビルドする。
+          # パッケージ解決済みの状態でビルドを実行する。
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
           "$UNITY_PATH" \
             -batchmode \
