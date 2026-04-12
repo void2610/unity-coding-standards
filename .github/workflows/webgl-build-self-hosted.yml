@@ -88,7 +88,6 @@ jobs:
             --branch="${{ inputs.deploy-branch }}"
 
       - name: Notify Discord
-        if: secrets.DISCORD_WEBHOOK_URL != ''
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           COMMIT_SHA: ${{ github.sha }}
