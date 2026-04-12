@@ -104,6 +104,9 @@ jobs:
         run: |
           # パッケージ解決済みの状態でテストを実行する。
           # -runTests は終了コード 0=成功, 2=テスト失敗, それ以外=エラー として返す。
+          echo "::group::Debug: Assets/Packages contents"
+          ls -la "$GITHUB_WORKSPACE/Assets/Packages/" 2>&1 || echo "Assets/Packages does not exist"
+          echo "::endgroup::"
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
           mkdir -p "$(dirname "$TEST_RESULTS_PATH")"
           EXIT_CODE=0
