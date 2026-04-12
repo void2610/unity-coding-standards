@@ -32,65 +32,26 @@ on:
         required: false
         type: string
         default: ""
+      nuget-packages-config:
+        description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
+        required: false
+        type: string
+        default: Assets/packages.config
 
 jobs:
   test:
     name: ${{ inputs.job-name }}
-    # 呼び出し側が指定したラベル配列で runner を選択する。
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
     env:
       UNITY_VERSION: ${{ inputs.unity-version }}
       TEST_RESULTS_PATH: TestResults/results.xml
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Setup Unity project
+        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
         with:
-          lfs: true
-          submodules: recursive
-          fetch-depth: 1
-
-      - name: Verify Unity installation
-        run: |
-          # self-hosted runner では Unity を action が配ってくれないため、実機の導入状態を先に検証する。
-          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
-          if [ ! -x "$UNITY_PATH" ]; then
-            echo "Unity not found at $UNITY_PATH" >&2
-            exit 1
-          fi
-          "$UNITY_PATH" -version
-
-      - name: Restore NuGet packages
-        if: inputs.nuget-restore-method != ''
-        run: |
-          # NuGet for Unity のパッケージ (R3 コア等) は Assets/Packages/ に配置されるが
-          # .gitignore で除外されているため、CI 環境では毎回復元が必要。
-          # 手順:
-          #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する
-          #   2. 復元した DLL を反映するため再度 Unity を起動して再コンパイルする
-          #      (Library キャッシュが古い場合に初回コンパイルが失敗するため
-          #       2回目も -ignoreCompilerErrors を付ける)
-          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
-
-          echo "::group::NuGet restore"
-          "$UNITY_PATH" \
-            -batchmode \
-            -quit \
-            -nographics \
-            -ignoreCompilerErrors \
-            -projectPath "$GITHUB_WORKSPACE" \
-            -executeMethod "${{ inputs.nuget-restore-method }}" \
-            -logFile -
-          echo "::endgroup::"
-
-          echo "::group::Recompile after restore"
-          "$UNITY_PATH" \
-            -batchmode \
-            -quit \
-            -nographics \
-            -ignoreCompilerErrors \
-            -projectPath "$GITHUB_WORKSPACE" \
-            -logFile -
-          echo "::endgroup::"
+          unity-version: ${{ inputs.unity-version }}
+          nuget-restore-method: ${{ inputs.nuget-restore-method }}
+          nuget-packages-config: ${{ inputs.nuget-packages-config }}
 
       - name: Run Unity tests
         run: |

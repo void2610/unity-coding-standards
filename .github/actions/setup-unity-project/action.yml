@@ -1,0 +1,87 @@
+name: Setup Unity Project (Self-Hosted)
+description: |
+  セルフホストランナー向け Unity プロジェクトのセットアップ。
+  チェックアウト、Unity バージョン検証、NuGet パッケージ復元を行う。
+
+inputs:
+  unity-version:
+    description: Unity Editor のバージョン
+    required: true
+  nuget-restore-method:
+    description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
+    required: false
+    default: ""
+  nuget-packages-config:
+    description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
+    required: false
+    default: Assets/packages.config
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+        submodules: recursive
+        fetch-depth: 1
+
+    - name: Verify Unity installation
+      shell: bash
+      env:
+        UNITY_VERSION: ${{ inputs.unity-version }}
+      run: |
+        # self-hosted runner では Unity を action が配ってくれないため、実機の導入状態を先に検証する。
+        UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+        if [ ! -x "$UNITY_PATH" ]; then
+          echo "Unity not found at $UNITY_PATH" >&2
+          exit 1
+        fi
+        "$UNITY_PATH" -version
+
+    - name: Restore NuGet packages
+      if: inputs.nuget-restore-method != ''
+      shell: bash
+      env:
+        UNITY_VERSION: ${{ inputs.unity-version }}
+      run: |
+        # packages.config のハッシュを前回復元時と比較し、変更がなければスキップする。
+        # セルフホストランナーでは Assets/Packages/ がディスクに残るため、
+        # 依存が変わっていなければ毎回 Unity を起動する必要はない。
+        HASH_FILE="$GITHUB_WORKSPACE/.nuget-restore-hash"
+        CURRENT_HASH=$(shasum "$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}" 2>/dev/null | cut -d' ' -f1 || echo "none")
+
+        if [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$CURRENT_HASH" ]; then
+          echo "packages.config に変更なし — NuGet 復元をスキップします。"
+          exit 0
+        fi
+
+        echo "packages.config が変更されたため NuGet 復元を実行します。"
+        UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+
+        # 手順:
+        #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する
+        #   2. 復元した DLL を反映するため再度 Unity を起動して再コンパイルする
+        echo "::group::NuGet restore"
+        "$UNITY_PATH" \
+          -batchmode \
+          -quit \
+          -nographics \
+          -ignoreCompilerErrors \
+          -projectPath "$GITHUB_WORKSPACE" \
+          -executeMethod "${{ inputs.nuget-restore-method }}" \
+          -logFile -
+        echo "::endgroup::"
+
+        echo "::group::Recompile after restore"
+        "$UNITY_PATH" \
+          -batchmode \
+          -quit \
+          -nographics \
+          -ignoreCompilerErrors \
+          -projectPath "$GITHUB_WORKSPACE" \
+          -logFile -
+        echo "::endgroup::"
+
+        # 復元成功時のみハッシュを保存する。
+        echo "$CURRENT_HASH" > "$HASH_FILE"
