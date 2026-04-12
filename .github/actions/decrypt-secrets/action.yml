@@ -1,0 +1,45 @@
+name: Decrypt CI Secrets
+description: |
+  unity-coding-standards/secrets/ci.yaml を sops で復号し、
+  各キーを GITHUB_ENV に環境変数として出力する。
+  呼び出し側リポジトリには SOPS_AGE_KEY secret のみ必要。
+
+inputs:
+  sops-age-key:
+    description: "sops 復号用の AGE 秘密鍵"
+    required: true
+
+outputs:
+  cloudflare-account-id:
+    description: "Cloudflare Account ID"
+    value: ${{ steps.decrypt.outputs.cloudflare_account_id }}
+  cloudflare-api-token:
+    description: "Cloudflare API Token"
+    value: ${{ steps.decrypt.outputs.cloudflare_api_token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Decrypt secrets
+      id: decrypt
+      shell: bash
+      env:
+        SOPS_AGE_KEY: ${{ inputs.sops-age-key }}
+      run: |
+        # unity-coding-standards サブモジュール内の暗号化ファイルを復号する。
+        SECRETS_FILE="$GITHUB_WORKSPACE/unity-coding-standards/secrets/ci.yaml"
+        if [ ! -f "$SECRETS_FILE" ]; then
+          echo "::error::Secrets file not found: $SECRETS_FILE"
+          exit 1
+        fi
+
+        # sops で復号して各キーを output に設定する。
+        # マスクして GitHub ログに表示されないようにする。
+        ACCOUNT_ID=$(sops -d --extract '["cloudflare_account_id"]' "$SECRETS_FILE")
+        API_TOKEN=$(sops -d --extract '["cloudflare_api_token"]' "$SECRETS_FILE")
+
+        echo "::add-mask::$ACCOUNT_ID"
+        echo "::add-mask::$API_TOKEN"
+
+        echo "cloudflare_account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
+        echo "cloudflare_api_token=$API_TOKEN" >> "$GITHUB_OUTPUT"

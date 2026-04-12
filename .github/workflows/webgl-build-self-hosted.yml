@@ -40,9 +40,7 @@ on:
         type: string
         default: Assets/packages.config
     secrets:
-      CLOUDFLARE_ACCOUNT_ID:
-        required: true
-      CLOUDFLARE_API_TOKEN:
+      SOPS_AGE_KEY:
         required: true
 
 jobs:
@@ -72,10 +70,16 @@ jobs:
             -executeMethod "${{ inputs.execute-method }}" \
             -logFile -
 
+      - name: Decrypt secrets
+        id: secrets
+        uses: void2610/unity-coding-standards/.github/actions/decrypt-secrets@main
+        with:
+          sops-age-key: ${{ secrets.SOPS_AGE_KEY }}
+
       - name: Deploy to Cloudflare Pages
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.secrets.outputs.cloudflare-account-id }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.secrets.outputs.cloudflare-api-token }}
         run: |
           npx wrangler pages deploy "${UNITY_BUILD_OUTPUT_PATH}" \
             --project-name="${{ inputs.cloudflare-project-name }}" \
