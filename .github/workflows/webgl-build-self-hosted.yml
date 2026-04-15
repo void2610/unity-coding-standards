@@ -124,6 +124,11 @@ jobs:
             exit 0
           fi
 
+          # pr-head-sha は shallow clone に含まれない場合があるため fetch する
+          if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
+            git fetch origin "$COMMIT_SHA" --depth=1
+          fi
+
           SHORT_SHA="${COMMIT_SHA:0:7}"
           COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
           COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
