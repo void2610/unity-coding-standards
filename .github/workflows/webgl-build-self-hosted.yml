@@ -54,6 +54,11 @@ on:
         required: false
         type: string
         default: ""
+      pr-head-sha:
+        description: "PR のヘッドコミット SHA（pull_request イベントでは github.sha がマージコミットになるため）"
+        required: false
+        type: string
+        default: ""
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -105,7 +110,7 @@ jobs:
       - name: Notify Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_SHA: ${{ inputs.pr-head-sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
           CLOUDFLARE_PROJECT: ${{ inputs.cloudflare-project-name }}
           DEPLOY_BRANCH: ${{ inputs.deploy-branch }}
