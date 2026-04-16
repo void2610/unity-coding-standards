@@ -46,8 +46,6 @@ on:
         required: true
       STEAM_APP_ID:
         required: true
-      DISCORD_WEBHOOK_URL:
-        required: false
 
 jobs:
   generate-version:
@@ -131,40 +129,3 @@ jobs:
           rootPath: builds
           depot1Path: StandaloneOSX
           releaseBranch: ${{ inputs.release-branch }}
-
-      - name: Notify Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMIT_SHA: ${{ github.sha }}
-          REPOSITORY: ${{ github.repository }}
-          VERSION: ${{ needs.generate-version.outputs.version }}
-          RELEASE_BRANCH: ${{ inputs.release-branch }}
-        run: |
-          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
-            exit 0
-          fi
-
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
-          REPO_URL="https://github.com/${REPOSITORY}"
-
-          PAYLOAD=$(jq -n \
-            --arg title "🎮 Steam Deploy Complete" \
-            --arg version "$VERSION" \
-            --arg branch "$RELEASE_BRANCH" \
-            --arg repo "[$REPOSITORY]($REPO_URL)" \
-            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
-            '{embeds: [{
-              title: $title,
-              color: 5763719,
-              fields: [
-                {name: "Version", value: $version, inline: false},
-                {name: "Steam Branch", value: $branch, inline: true},
-                {name: "Commit", value: $commit, inline: true},
-                {name: "Repository", value: $repo, inline: false}
-              ]
-            }]}')
-
-          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
