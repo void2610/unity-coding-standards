@@ -1,0 +1,170 @@
+name: Shared Steam Deploy (Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      unity-version:
+        description: "Unity Editor のバージョン（例: 6000.3.10f1）"
+        required: true
+        type: string
+      build-name:
+        description: "ビルド名（Steam の depot に使用）"
+        required: true
+        type: string
+      execute-method:
+        description: "-executeMethod に渡すビルドメソッドの完全修飾名"
+        required: true
+        type: string
+      runner-labels:
+        description: "self-hosted runner のラベル配列（JSON 形式、例: [\"self-hosted\",\"macos\"]）"
+        required: true
+        type: string
+      release-branch:
+        description: "Steam のリリースブランチ（test / staging / production など）"
+        required: false
+        type: string
+        default: test
+      build-output-path:
+        description: "ビルド成果物の出力先パス"
+        required: false
+        type: string
+        default: CIBuilds/StandaloneOSX/build
+      nuget-restore-method:
+        description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
+        required: false
+        type: string
+        default: ""
+      nuget-packages-config:
+        description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
+        required: false
+        type: string
+        default: Assets/packages.config
+    secrets:
+      STEAM_USERNAME:
+        required: true
+      STEAM_CONFIG_VDF:
+        required: true
+      STEAM_APP_ID:
+        required: true
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  generate-version:
+    name: Generate Version
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    outputs:
+      version: ${{ steps.version.outputs.buildVersion }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version string
+        id: version
+        run: |
+          # 最新タグ + JST 日時 + コミットハッシュでバージョン文字列を生成する
+          base_version="$(git tag --sort=-version:refname | head -n 1 || echo "0.0.0")"
+          date_jst="$(TZ=Asia/Tokyo date '+%Y/%m/%d %H:%M:%S')"
+          short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          full_version="${base_version} ${date_jst} ${short_sha}"
+          echo "buildVersion=${full_version}" >> "$GITHUB_OUTPUT"
+          echo "Generated version: ${full_version}"
+
+  build:
+    name: Build macOS
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    needs: generate-version
+    env:
+      UNITY_VERSION: ${{ inputs.unity-version }}
+      UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+    steps:
+      - name: Setup Unity project
+        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
+        with:
+          unity-version: ${{ inputs.unity-version }}
+          nuget-restore-method: ${{ inputs.nuget-restore-method }}
+          nuget-packages-config: ${{ inputs.nuget-packages-config }}
+
+      - name: Build project
+        run: |
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget StandaloneOSX \
+            -executeMethod "${{ inputs.execute-method }}" \
+            -logFile -
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: ${{ inputs.build-output-path }}
+          retention-days: 1
+
+  deploy-steam:
+    name: Deploy to Steam
+    needs: [generate-version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-build
+          path: builds/StandaloneOSX
+
+      - name: Get short SHA
+        id: short_sha
+        run: echo "sha_short=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: ${{ secrets.STEAM_APP_ID }}
+          buildDescription: "auto deploy via github actions (${{ steps.short_sha.outputs.sha_short }}) v${{ needs.generate-version.outputs.version }}"
+          rootPath: builds
+          depot1Path: StandaloneOSX
+          releaseBranch: ${{ inputs.release-branch }}
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.generate-version.outputs.version }}
+          RELEASE_BRANCH: ${{ inputs.release-branch }}
+        run: |
+          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
+            exit 0
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+          REPO_URL="https://github.com/${REPOSITORY}"
+
+          PAYLOAD=$(jq -n \
+            --arg title "🎮 Steam Deploy Complete" \
+            --arg version "$VERSION" \
+            --arg branch "$RELEASE_BRANCH" \
+            --arg repo "[$REPOSITORY]($REPO_URL)" \
+            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+            '{embeds: [{
+              title: $title,
+              color: 5763719,
+              fields: [
+                {name: "Version", value: $version, inline: false},
+                {name: "Steam Branch", value: $branch, inline: true},
+                {name: "Commit", value: $commit, inline: true},
+                {name: "Repository", value: $repo, inline: false}
+              ]
+            }]}')
+
+          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
