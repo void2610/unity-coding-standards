@@ -24,6 +24,7 @@
 - secrets のキー名変更は sops 再暗号化が必要。手動で `sops` コマンドで `secrets/ci.yaml` を更新する
 - Discord 通知の payload フォーマットは `actions/notify-discord/action.yml` 一箇所に集約されている。ビルド/デプロイ workflow 側にインライン展開しない
 - YAML 内で `${{ ... }}` の中に `#` を含む文字列（例: `PR #{0}`）を書く場合は、値全体を `"..."` でダブルクォートする（YAML コメント解釈を避けるため）
+- **composite action の step では `timeout-minutes` が使えない**。タイムアウトを設定したい場合は、action を呼び出す側の workflow step に `timeout-minutes:` を付ける
 
 ## Unity 起動の慣習
 

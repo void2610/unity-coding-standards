@@ -19,7 +19,6 @@ runs:
   steps:
     - name: Build project
       shell: bash
-      timeout-minutes: 45
       env:
         UNITY_PATH: ${{ inputs.unity-path }}
         UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}

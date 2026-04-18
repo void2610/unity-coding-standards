@@ -102,6 +102,7 @@ jobs:
           mv ProjectSettings/ProjectSettings.asset.tmp ProjectSettings/ProjectSettings.asset
 
       - name: Build WebGL
+        timeout-minutes: 45
         uses: void2610/unity-coding-standards/.github/actions/unity-webgl-build@main
         with:
           unity-path: ${{ steps.setup.outputs.unity-path }}
