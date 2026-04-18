@@ -1,0 +1,105 @@
+name: Notify Discord
+description: |
+  Discord Webhook にビルド/デプロイ通知を送る共通アクション。
+  PR 番号が指定されていればプレビュー通知、そうでなければ通常デプロイ通知として整形する。
+
+inputs:
+  discord-webhook-url:
+    description: "Discord Webhook URL。空なら通知をスキップする。"
+    required: false
+    default: ""
+  deploy-url:
+    description: "通知に表示するデプロイ先 URL。"
+    required: true
+  commit-sha:
+    description: "通知対象のコミット SHA。PR では pull_request.head.sha を渡す。"
+    required: true
+  repository:
+    description: "リポジトリ (owner/repo)。未指定なら github.repository を使う。"
+    required: false
+    default: ""
+  pr-number:
+    description: "PR 番号。指定時はプレビュー通知フォーマットになる。"
+    required: false
+    default: ""
+  pr-title:
+    description: "PR タイトル（プレビュー通知用）。"
+    required: false
+    default: ""
+  pr-url:
+    description: "PR の URL（プレビュー通知用）。"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Send Discord notification
+      shell: bash
+      env:
+        DISCORD_WEBHOOK_URL: ${{ inputs.discord-webhook-url }}
+        DEPLOY_URL: ${{ inputs.deploy-url }}
+        COMMIT_SHA: ${{ inputs.commit-sha }}
+        REPOSITORY: ${{ inputs.repository || github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        PR_TITLE: ${{ inputs.pr-title }}
+        PR_URL: ${{ inputs.pr-url }}
+      run: |
+        # webhook 未設定ならスキップ
+        if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+          echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
+          exit 0
+        fi
+
+        # shallow clone で SHA が見つからない場合のみ fetch を試みる
+        if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
+          git fetch origin "$COMMIT_SHA" --depth=1 || true
+        fi
+
+        SHORT_SHA="${COMMIT_SHA:0:7}"
+        COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+        COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA" 2>/dev/null || echo "(unknown)")
+        AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA" 2>/dev/null || echo "(unknown)")
+        REPO_URL="https://github.com/${REPOSITORY}"
+
+        if [ -n "$PR_NUMBER" ]; then
+          PAYLOAD=$(jq -n \
+            --arg title "✅ PR Preview: #${PR_NUMBER}" \
+            --arg url "$DEPLOY_URL" \
+            --arg pr_title "$PR_TITLE" \
+            --arg preview "$DEPLOY_URL" \
+            --arg pr_link "[#${PR_NUMBER}]($PR_URL)" \
+            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg author "$AUTHOR" \
+            --arg commit_msg "$COMMIT_MSG" \
+            '{embeds: [{
+              title: $title,
+              url: $url,
+              description: ("🔍 **PR Preview**\n" + $pr_title),
+              color: 16753920,
+              fields: [
+                {name: "Preview URL", value: $preview, inline: false},
+                {name: "PR", value: $pr_link, inline: true},
+                {name: "Commit", value: $commit, inline: true},
+                {name: "Author", value: $author, inline: true},
+                {name: "Latest Commit Message", value: $commit_msg, inline: false}
+              ]
+            }]}')
+        else
+          PAYLOAD=$(jq -n \
+            --arg title "WebGL Build Deployed" \
+            --arg url "$DEPLOY_URL" \
+            --arg desc "$COMMIT_MSG" \
+            --arg preview "$DEPLOY_URL" \
+            --arg repo "[$REPOSITORY]($REPO_URL)" \
+            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg author "$AUTHOR" \
+            '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
+              {name: "Preview", value: $preview, inline: false},
+              {name: "Repository", value: $repo, inline: false},
+              {name: "Commit", value: $commit, inline: true},
+              {name: "Author", value: $author, inline: true}
+            ]}]}')
+        fi
+
+        curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"

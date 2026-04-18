@@ -107,84 +107,32 @@ jobs:
             --project-name="${{ inputs.cloudflare-project-name }}" \
             --branch="${{ inputs.deploy-branch }}"
 
-      - name: Notify Discord
+      - name: Compute deploy URL
+        id: deploy-url
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMIT_SHA: ${{ inputs.pr-head-sha || github.sha }}
-          REPOSITORY: ${{ github.repository }}
           CLOUDFLARE_PROJECT: ${{ inputs.cloudflare-project-name }}
           DEPLOY_BRANCH: ${{ inputs.deploy-branch }}
           PR_NUMBER: ${{ inputs.pr-number }}
-          PR_TITLE: ${{ inputs.pr-title }}
-          PR_URL: ${{ inputs.pr-url }}
         run: |
-          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
-            exit 0
-          fi
-
-          # pr-head-sha は shallow clone に含まれない場合があるため fetch する
-          if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
-            git fetch origin "$COMMIT_SHA" --depth=1
-          fi
-
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
-          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
-          AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA")
-          REPO_URL="https://github.com/${REPOSITORY}"
-
-          # PR 番号が指定されている場合は PR プレビュー通知を送る
           if [ -n "$PR_NUMBER" ]; then
-            # ブランチ名を Cloudflare Pages のプレビュー URL 形式にサニタイズ
+            # Cloudflare Pages の プレビュー URL 用にブランチ名をサニタイズする
             SANITIZED_BRANCH=$(echo "$DEPLOY_BRANCH" \
               | tr '[:upper:]' '[:lower:]' \
               | sed 's/[^a-z0-9]/-/g' \
               | sed 's/--*/-/g' \
               | sed 's/^-\|-$//g')
-            DEPLOY_URL="https://${SANITIZED_BRANCH}.${CLOUDFLARE_PROJECT}.pages.dev/"
-
-            PAYLOAD=$(jq -n \
-              --arg title "✅ PR Preview: #${PR_NUMBER}" \
-              --arg url "$DEPLOY_URL" \
-              --arg pr_title "$PR_TITLE" \
-              --arg preview "$DEPLOY_URL" \
-              --arg pr_link "[#${PR_NUMBER}]($PR_URL)" \
-              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
-              --arg author "$AUTHOR" \
-              --arg commit_msg "$COMMIT_MSG" \
-              '{embeds: [{
-                title: $title,
-                url: $url,
-                description: ("🔍 **PR Preview**\n" + $pr_title),
-                color: 16753920,
-                fields: [
-                  {name: "Preview URL", value: $preview, inline: false},
-                  {name: "PR", value: $pr_link, inline: true},
-                  {name: "Commit", value: $commit, inline: true},
-                  {name: "Author", value: $author, inline: true},
-                  {name: "Latest Commit Message", value: $commit_msg, inline: false}
-                ]
-              }]}')
+            URL="https://${SANITIZED_BRANCH}.${CLOUDFLARE_PROJECT}.pages.dev/"
           else
-            # 通常のデプロイ通知
-            DEPLOY_URL="https://${CLOUDFLARE_PROJECT}.pages.dev/"
-
-            PAYLOAD=$(jq -n \
-              --arg title "WebGL Build Deployed" \
-              --arg url "$DEPLOY_URL" \
-              --arg desc "$COMMIT_MSG" \
-              --arg preview "$DEPLOY_URL" \
-              --arg repo "[$REPOSITORY]($REPO_URL)" \
-              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
-              --arg author "$AUTHOR" \
-              '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
-                {name: "Preview", value: $preview, inline: false},
-                {name: "Repository", value: $repo, inline: false},
-                {name: "Commit", value: $commit, inline: true},
-                {name: "Author", value: $author, inline: true}
-              ]}]}')
+            URL="https://${CLOUDFLARE_PROJECT}.pages.dev/"
           fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
+      - name: Notify Discord
+        uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
+        with:
+          discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          deploy-url: ${{ steps.deploy-url.outputs.url }}
+          commit-sha: ${{ inputs.pr-head-sha || github.sha }}
+          pr-number: ${{ inputs.pr-number }}
+          pr-title: ${{ inputs.pr-title }}
+          pr-url: ${{ inputs.pr-url }}

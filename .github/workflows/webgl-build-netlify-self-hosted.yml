@@ -144,70 +144,11 @@ jobs:
           echo "deploy_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
-          COMMIT_SHA: ${{ inputs.pr-head-sha || github.sha }}
-          REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ inputs.pr-number }}
-          PR_TITLE: ${{ inputs.pr-title }}
-          PR_URL: ${{ inputs.pr-url }}
-        run: |
-          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
-            exit 0
-          fi
-
-          # pr-head-sha は shallow clone に含まれない場合があるため fetch する
-          if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
-            git fetch origin "$COMMIT_SHA" --depth=1
-          fi
-
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
-          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
-          AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA")
-          REPO_URL="https://github.com/${REPOSITORY}"
-
-          if [ -n "$PR_NUMBER" ]; then
-            PAYLOAD=$(jq -n \
-              --arg title "✅ PR Preview: #${PR_NUMBER}" \
-              --arg url "$DEPLOY_URL" \
-              --arg pr_title "$PR_TITLE" \
-              --arg preview "$DEPLOY_URL" \
-              --arg pr_link "[#${PR_NUMBER}]($PR_URL)" \
-              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
-              --arg author "$AUTHOR" \
-              --arg commit_msg "$COMMIT_MSG" \
-              '{embeds: [{
-                title: $title,
-                url: $url,
-                description: ("🔍 **PR Preview**\n" + $pr_title),
-                color: 16753920,
-                fields: [
-                  {name: "Preview URL", value: $preview, inline: false},
-                  {name: "PR", value: $pr_link, inline: true},
-                  {name: "Commit", value: $commit, inline: true},
-                  {name: "Author", value: $author, inline: true},
-                  {name: "Latest Commit Message", value: $commit_msg, inline: false}
-                ]
-              }]}')
-          else
-            PAYLOAD=$(jq -n \
-              --arg title "WebGL Build Deployed" \
-              --arg url "$DEPLOY_URL" \
-              --arg desc "$COMMIT_MSG" \
-              --arg preview "$DEPLOY_URL" \
-              --arg repo "[$REPOSITORY]($REPO_URL)" \
-              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
-              --arg author "$AUTHOR" \
-              '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
-                {name: "Preview", value: $preview, inline: false},
-                {name: "Repository", value: $repo, inline: false},
-                {name: "Commit", value: $commit, inline: true},
-                {name: "Author", value: $author, inline: true}
-              ]}]}')
-          fi
-
-          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
+        uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
+        with:
+          discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          deploy-url: ${{ steps.deploy.outputs.deploy_url }}
+          commit-sha: ${{ inputs.pr-head-sha || github.sha }}
+          pr-number: ${{ inputs.pr-number }}
+          pr-title: ${{ inputs.pr-title }}
+          pr-url: ${{ inputs.pr-url }}
