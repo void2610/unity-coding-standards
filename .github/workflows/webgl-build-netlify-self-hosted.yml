@@ -1,0 +1,213 @@
+name: Shared WebGL Build Netlify (Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      unity-version:
+        description: "Unity Editor のバージョン（例: 6000.3.10f1）"
+        required: true
+        type: string
+      execute-method:
+        description: "-executeMethod に渡すビルドメソッドの完全修飾名"
+        required: true
+        type: string
+      runner-labels:
+        description: "self-hosted runner のラベル配列（JSON 形式、例: [\"self-hosted\",\"macOS\"]）"
+        required: true
+        type: string
+      build-output-path:
+        description: "ビルド成果物の出力先パス"
+        required: false
+        type: string
+        default: CIBuilds/WebGL/build
+      nuget-restore-method:
+        description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
+        required: false
+        type: string
+        default: ""
+      nuget-packages-config:
+        description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
+        required: false
+        type: string
+        default: Assets/packages.config
+      deploy-alias:
+        description: "Netlify のデプロイエイリアス（空文字列だと本番デプロイ）"
+        required: false
+        type: string
+        default: ""
+      deploy-message:
+        description: "Netlify のデプロイメッセージ"
+        required: false
+        type: string
+        default: ""
+      pr-number:
+        description: "PR 番号（PR プレビュー通知を送る場合に指定）"
+        required: false
+        type: string
+        default: ""
+      pr-title:
+        description: "PR タイトル（PR プレビュー通知用）"
+        required: false
+        type: string
+        default: ""
+      pr-url:
+        description: "PR の URL（PR プレビュー通知用）"
+        required: false
+        type: string
+        default: ""
+      pr-head-sha:
+        description: "PR のヘッドコミット SHA（pull_request イベントでは github.sha がマージコミットになるため）"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  build:
+    name: Build WebGL
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    env:
+      UNITY_VERSION: ${{ inputs.unity-version }}
+      UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+    steps:
+      - name: Setup Unity project
+        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
+        with:
+          unity-version: ${{ inputs.unity-version }}
+          nuget-restore-method: ${{ inputs.nuget-restore-method }}
+          nuget-packages-config: ${{ inputs.nuget-packages-config }}
+
+      - name: Build project
+        timeout-minutes: 45
+        run: |
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
+          # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
+          rm -f Temp/UnityLockfile
+          rm -rf "$UNITY_BUILD_OUTPUT_PATH"
+
+          set +e
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget WebGL \
+            -executeMethod "${{ inputs.execute-method }}" \
+            -logFile "$LOG_FILE"
+          UNITY_EXIT_CODE=$?
+          set -e
+
+          tail -n 200 "$LOG_FILE"
+
+          if [ "$UNITY_EXIT_CODE" -ne 0 ]; then
+            echo "Unity WebGL build failed."
+            exit "$UNITY_EXIT_CODE"
+          fi
+
+      - name: Deploy to Netlify
+        id: deploy
+        timeout-minutes: 15
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          DEPLOY_ALIAS: ${{ inputs.deploy-alias }}
+          DEPLOY_MESSAGE: ${{ inputs.deploy-message }}
+        run: |
+          # alias が空なら本番デプロイ、指定があればプレビューデプロイ。
+          if [ -n "$DEPLOY_ALIAS" ]; then
+            DEPLOY_ARGS=(--alias "$DEPLOY_ALIAS")
+          else
+            DEPLOY_ARGS=(--prod)
+          fi
+
+          if [ -n "$DEPLOY_MESSAGE" ]; then
+            DEPLOY_ARGS+=(--message "$DEPLOY_MESSAGE")
+          fi
+
+          DEPLOY_JSON=$(npx --yes netlify-cli@latest deploy \
+            --dir "${UNITY_BUILD_OUTPUT_PATH}" \
+            --site "$NETLIFY_SITE_ID" \
+            --auth "$NETLIFY_AUTH_TOKEN" \
+            --json \
+            "${DEPLOY_ARGS[@]}")
+
+          echo "$DEPLOY_JSON"
+
+          DEPLOY_URL=$(echo "$DEPLOY_JSON" | jq -r '.deploy_url')
+          echo "deploy_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
+          COMMIT_SHA: ${{ inputs.pr-head-sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_TITLE: ${{ inputs.pr-title }}
+          PR_URL: ${{ inputs.pr-url }}
+        run: |
+          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
+            exit 0
+          fi
+
+          # pr-head-sha は shallow clone に含まれない場合があるため fetch する
+          if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
+            git fetch origin "$COMMIT_SHA" --depth=1
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
+          AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA")
+          REPO_URL="https://github.com/${REPOSITORY}"
+
+          if [ -n "$PR_NUMBER" ]; then
+            PAYLOAD=$(jq -n \
+              --arg title "✅ PR Preview: #${PR_NUMBER}" \
+              --arg url "$DEPLOY_URL" \
+              --arg pr_title "$PR_TITLE" \
+              --arg preview "$DEPLOY_URL" \
+              --arg pr_link "[#${PR_NUMBER}]($PR_URL)" \
+              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+              --arg author "$AUTHOR" \
+              --arg commit_msg "$COMMIT_MSG" \
+              '{embeds: [{
+                title: $title,
+                url: $url,
+                description: ("🔍 **PR Preview**\n" + $pr_title),
+                color: 16753920,
+                fields: [
+                  {name: "Preview URL", value: $preview, inline: false},
+                  {name: "PR", value: $pr_link, inline: true},
+                  {name: "Commit", value: $commit, inline: true},
+                  {name: "Author", value: $author, inline: true},
+                  {name: "Latest Commit Message", value: $commit_msg, inline: false}
+                ]
+              }]}')
+          else
+            PAYLOAD=$(jq -n \
+              --arg title "WebGL Build Deployed" \
+              --arg url "$DEPLOY_URL" \
+              --arg desc "$COMMIT_MSG" \
+              --arg preview "$DEPLOY_URL" \
+              --arg repo "[$REPOSITORY]($REPO_URL)" \
+              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+              --arg author "$AUTHOR" \
+              '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
+                {name: "Preview", value: $preview, inline: false},
+                {name: "Repository", value: $repo, inline: false},
+                {name: "Commit", value: $commit, inline: true},
+                {name: "Author", value: $author, inline: true}
+              ]}]}')
+          fi
+
+          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
