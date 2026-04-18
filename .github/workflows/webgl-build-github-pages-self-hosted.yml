@@ -85,8 +85,11 @@ jobs:
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
 
       - name: Build project
+        timeout-minutes: 45
         run: |
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
+          rm -f Temp/UnityLockfile
           "$UNITY_PATH" \
             -batchmode \
             -quit \
