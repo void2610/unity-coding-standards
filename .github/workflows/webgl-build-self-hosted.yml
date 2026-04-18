@@ -74,23 +74,19 @@ jobs:
       UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
     steps:
       - name: Setup Unity project
+        id: setup
         uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
         with:
           unity-version: ${{ inputs.unity-version }}
           nuget-restore-method: ${{ inputs.nuget-restore-method }}
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
 
-      - name: Build project
-        run: |
-          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
-          "$UNITY_PATH" \
-            -batchmode \
-            -quit \
-            -nographics \
-            -projectPath "$GITHUB_WORKSPACE" \
-            -buildTarget WebGL \
-            -executeMethod "${{ inputs.execute-method }}" \
-            -logFile -
+      - name: Build WebGL
+        uses: void2610/unity-coding-standards/.github/actions/unity-webgl-build@main
+        with:
+          unity-path: ${{ steps.setup.outputs.unity-path }}
+          execute-method: ${{ inputs.execute-method }}
+          build-output-path: ${{ inputs.build-output-path }}
 
       - name: Decrypt secrets
         id: secrets

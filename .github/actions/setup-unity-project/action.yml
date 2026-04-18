@@ -2,6 +2,7 @@ name: Setup Unity Project (Self-Hosted)
 description: |
   セルフホストランナー向け Unity プロジェクトのセットアップ。
   チェックアウト、Unity バージョン検証、NuGet パッケージ復元を行う。
+  後続ステップで使う UNITY_PATH を output として提供する。
 
 inputs:
   unity-version:
@@ -15,6 +16,11 @@ inputs:
     description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
     required: false
     default: Assets/packages.config
+
+outputs:
+  unity-path:
+    description: "Unity.app 内の実行ファイルパス。後続の Unity 呼び出しで再利用する。"
+    value: ${{ steps.verify.outputs.unity-path }}
 
 runs:
   using: composite
@@ -30,6 +36,7 @@ runs:
         clean: false
 
     - name: Verify Unity installation
+      id: verify
       shell: bash
       env:
         UNITY_VERSION: ${{ inputs.unity-version }}
@@ -41,12 +48,13 @@ runs:
           exit 1
         fi
         "$UNITY_PATH" -version
+        echo "unity-path=$UNITY_PATH" >> "$GITHUB_OUTPUT"
 
     - name: Restore NuGet packages
       if: inputs.nuget-restore-method != ''
       shell: bash
       env:
-        UNITY_VERSION: ${{ inputs.unity-version }}
+        UNITY_PATH: ${{ steps.verify.outputs.unity-path }}
       run: |
         # packages.config のハッシュを前回復元時と比較し、変更がなければスキップする。
         # セルフホストランナーでは Assets/Packages/ がディスクに残るため、
@@ -60,7 +68,6 @@ runs:
         fi
 
         echo "packages.config が変更されたため NuGet 復元を実行します。"
-        UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
 
         # 手順:
         #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する

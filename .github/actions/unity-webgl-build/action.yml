@@ -1,0 +1,50 @@
+name: Unity WebGL Build
+description: |
+  Unity を batchmode で起動して WebGL ビルドを実行する共通アクション。
+  事前に setup-unity-project 等でプロジェクト準備と UNITY_PATH 取得が完了している前提。
+
+inputs:
+  unity-path:
+    description: "Unity.app 実行ファイルのパス。setup-unity-project の output を渡す想定。"
+    required: true
+  execute-method:
+    description: "-executeMethod に渡すビルドメソッドの完全修飾名。"
+    required: true
+  build-output-path:
+    description: "ビルド出力先。起動前に再作成される。"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build project
+      shell: bash
+      timeout-minutes: 45
+      env:
+        UNITY_PATH: ${{ inputs.unity-path }}
+        UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+        EXECUTE_METHOD: ${{ inputs.execute-method }}
+      run: |
+        LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
+        # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
+        rm -f Temp/UnityLockfile
+        rm -rf "$UNITY_BUILD_OUTPUT_PATH"
+
+        set +e
+        "$UNITY_PATH" \
+          -batchmode \
+          -quit \
+          -nographics \
+          -projectPath "$GITHUB_WORKSPACE" \
+          -buildTarget WebGL \
+          -executeMethod "$EXECUTE_METHOD" \
+          -logFile "$LOG_FILE"
+        UNITY_EXIT_CODE=$?
+        set -e
+
+        tail -n 200 "$LOG_FILE"
+
+        if [ "$UNITY_EXIT_CODE" -ne 0 ]; then
+          echo "Unity WebGL build failed."
+          exit "$UNITY_EXIT_CODE"
+        fi
