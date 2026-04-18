@@ -104,8 +104,11 @@ jobs:
         timeout-minutes: 45
         run: |
           UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
           # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
           rm -f Temp/UnityLockfile
+
+          set +e
           "$UNITY_PATH" \
             -batchmode \
             -quit \
@@ -113,7 +116,16 @@ jobs:
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget WebGL \
             -executeMethod "${{ inputs.execute-method }}" \
-            -logFile -
+            -logFile "$LOG_FILE"
+          UNITY_EXIT_CODE=$?
+          set -e
+
+          tail -n 200 "$LOG_FILE"
+
+          if [ "$UNITY_EXIT_CODE" -ne 0 ]; then
+            echo "Unity WebGL build failed."
+            exit "$UNITY_EXIT_CODE"
+          fi
 
       - name: Deploy to GitHub Pages
         timeout-minutes: 10
