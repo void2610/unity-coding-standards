@@ -197,6 +197,7 @@ dotnet_diagnostic.VUA2002.severity = warning
 dotnet_diagnostic.VUA3001.severity = warning
 dotnet_diagnostic.VUA3002.severity = warning
 dotnet_diagnostic.VUA3003.severity = warning
+dotnet_diagnostic.VUA3004.severity = warning
 dotnet_diagnostic.VUA4001.severity = warning
 
 # XML, JSON
