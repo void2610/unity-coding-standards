@@ -13,7 +13,7 @@
 
 1. **命名**: `-self-hosted` suffix は self-hosted ランナー専用であることを示す。GitHub-hosted 版と両方作る場合は suffix 有無で揃える（例: `unity-test.yml` / `unity-test-self-hosted.yml`）
 2. **input の description は日本語**で書く。既存ファイルのトーンに合わせる
-3. **secrets は呼び出し側 secret で受ける**のが原則。共有認証情報（Cloudflare トークン等）のみ `secrets/ci.yaml` に sops で格納する
+3. **secrets は呼び出し側 secret で受ける**のが原則。ただし **複数リポ横断で使える共通認証情報**（Cloudflare アカウント情報、Netlify Personal Access Token など）は `secrets/ci.yaml` に sops で格納し、`decrypt-secrets` action で取り出す。リポジトリ固有の値（Netlify Site ID 等）は呼び出し側 secret のまま
 4. 共通化できそうな shell ブロックを見つけたら **composite action に切り出す**。70 行程度のインラインロジックが 2〜3 箇所に重複したら共通化の目安
 5. **呼び出し側リポの `.github/workflows/build.yml` は薄いラッパー**に収まるよう設計する。アプリ固有のロジック（URL 生成など）が膨らむ場合は reusable workflow の input に追加する
 

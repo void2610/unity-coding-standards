@@ -25,8 +25,8 @@ runner-labels: '["self-hosted","macOS"]'
 ### 共通 secrets
 
 - `DISCORD_WEBHOOK_URL`（optional）: 指定時は Deploy 完了を通知する。[`../actions/notify-discord`](../actions/notify-discord) 参照
-- `SOPS_AGE_KEY`（Cloudflare 版のみ required）: `secrets/ci.yaml` の sops 復号用。[`../actions/decrypt-secrets`](../actions/decrypt-secrets) 参照
-- `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID`（Netlify 版のみ required）: 呼び出し側リポの secrets に登録する
+- `SOPS_AGE_KEY`（Cloudflare / Netlify 版で required）: `secrets/ci.yaml` の sops 復号用。Cloudflare Account ID/API Token と Netlify Personal Access Token をここから取り出す。[`../actions/decrypt-secrets`](../actions/decrypt-secrets) 参照
+- `NETLIFY_SITE_ID`（Netlify 版のみ required）: リポジトリ固有のため呼び出し側 secret に登録する
 
 ### 共通 inputs
 
@@ -67,7 +67,7 @@ jobs:
       pr-url: ${{ github.event.pull_request.html_url }}
       pr-head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
     secrets:
-      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 ```

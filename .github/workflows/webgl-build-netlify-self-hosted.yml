@@ -61,7 +61,7 @@ on:
         type: string
         default: ""
     secrets:
-      NETLIFY_AUTH_TOKEN:
+      SOPS_AGE_KEY:
         required: true
       NETLIFY_SITE_ID:
         required: true
@@ -91,11 +91,17 @@ jobs:
           execute-method: ${{ inputs.execute-method }}
           build-output-path: ${{ inputs.build-output-path }}
 
+      - name: Decrypt secrets
+        id: secrets
+        uses: void2610/unity-coding-standards/.github/actions/decrypt-secrets@main
+        with:
+          sops-age-key: ${{ secrets.SOPS_AGE_KEY }}
+
       - name: Deploy to Netlify
         id: deploy
         timeout-minutes: 15
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ steps.secrets.outputs.netlify-auth-token }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           DEPLOY_ALIAS: ${{ inputs.deploy-alias }}
           DEPLOY_MESSAGE: ${{ inputs.deploy-message }}

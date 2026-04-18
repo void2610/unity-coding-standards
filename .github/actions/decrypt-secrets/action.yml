@@ -16,6 +16,9 @@ outputs:
   cloudflare-api-token:
     description: "Cloudflare API Token"
     value: ${{ steps.decrypt.outputs.cloudflare_api_token }}
+  netlify-auth-token:
+    description: "Netlify Personal Access Token"
+    value: ${{ steps.decrypt.outputs.netlify_auth_token }}
 
 runs:
   using: composite
@@ -33,13 +36,20 @@ runs:
           exit 1
         fi
 
-        # sops で復号して各キーを output に設定する。
-        # マスクして GitHub ログに表示されないようにする。
-        ACCOUNT_ID=$(sops -d --extract '["cloudflare_account_id"]' "$SECRETS_FILE")
-        API_TOKEN=$(sops -d --extract '["cloudflare_api_token"]' "$SECRETS_FILE")
+        # キー未定義でも呼び出し側 workflow が使わなければ問題ないよう、失敗時は空文字列を返す。
+        extract() {
+          sops -d --extract "[\"$1\"]" "$SECRETS_FILE" 2>/dev/null || true
+        }
 
-        echo "::add-mask::$ACCOUNT_ID"
-        echo "::add-mask::$API_TOKEN"
+        ACCOUNT_ID=$(extract cloudflare_account_id)
+        API_TOKEN=$(extract cloudflare_api_token)
+        NETLIFY_TOKEN=$(extract netlify_auth_token)
+
+        # 値が入っていればマスクして GitHub ログに表示されないようにする。
+        [ -n "$ACCOUNT_ID" ] && echo "::add-mask::$ACCOUNT_ID"
+        [ -n "$API_TOKEN" ] && echo "::add-mask::$API_TOKEN"
+        [ -n "$NETLIFY_TOKEN" ] && echo "::add-mask::$NETLIFY_TOKEN"
 
         echo "cloudflare_account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
         echo "cloudflare_api_token=$API_TOKEN" >> "$GITHUB_OUTPUT"
+        echo "netlify_auth_token=$NETLIFY_TOKEN" >> "$GITHUB_OUTPUT"
