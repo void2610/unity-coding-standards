@@ -107,6 +107,7 @@ jobs:
           LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
           # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
           rm -f Temp/UnityLockfile
+          rm -rf "$UNITY_BUILD_OUTPUT_PATH"
 
           set +e
           "$UNITY_PATH" \
