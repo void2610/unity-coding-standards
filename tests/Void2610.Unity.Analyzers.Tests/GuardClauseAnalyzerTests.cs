@@ -226,6 +226,25 @@ public class TestClass
         }
 
         [Fact]
+        public async Task 複数行条件式のガード節_NoDiagnostic()
+        {
+            var test = @"
+public class TestClass
+{
+    public void Method(int x, int y, int z)
+    {
+        if (x > 0
+            && y > 0
+            && z > 0)
+        {
+            return;
+        }
+    }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
         public async Task elseIfチェーン_NoDiagnostic()
         {
             var test = @"

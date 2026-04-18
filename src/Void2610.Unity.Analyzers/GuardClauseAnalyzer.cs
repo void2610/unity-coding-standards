@@ -48,6 +48,10 @@ namespace Void2610.Unity.Analyzers
             var ifLineSpan = ifStatement.GetLocation().GetLineSpan();
             if (ifLineSpan.StartLinePosition.Line == ifLineSpan.EndLinePosition.Line) return;
 
+            // 条件式が複数行にまたがる場合は1行化できないため除外
+            var conditionSpan = ifStatement.Condition.GetLocation().GetLineSpan();
+            if (conditionSpan.StartLinePosition.Line != conditionSpan.EndLinePosition.Line) return;
+
             var conditionText = ifStatement.Condition.ToString();
             var diagnostic = Diagnostic.Create(
                 VUA3004,
