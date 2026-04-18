@@ -35,6 +35,11 @@ on:
         required: false
         type: string
         default: ""
+      optimize-webgl-build-settings:
+        description: "CI向けにWebGLビルド設定を一時的に最適化する"
+        required: false
+        type: boolean
+        default: false
       nuget-restore-method:
         description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
         required: false
@@ -83,6 +88,17 @@ jobs:
           unity-version: ${{ inputs.unity-version }}
           nuget-restore-method: ${{ inputs.nuget-restore-method }}
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
+
+      - name: Optimize WebGL build settings
+        if: inputs.optimize-webgl-build-settings
+        run: |
+          # CI上のWebGLビルド時間と公開ファイルサイズを抑える。
+          sed 's/WebGLLinkerTarget: 0/WebGLLinkerTarget: 1/g' ProjectSettings/ProjectSettings.asset > ProjectSettings/ProjectSettings.asset.tmp
+          mv ProjectSettings/ProjectSettings.asset.tmp ProjectSettings/ProjectSettings.asset
+          sed 's/webGLDecompressionFallback: 0/webGLDecompressionFallback: 1/g' ProjectSettings/ProjectSettings.asset > ProjectSettings/ProjectSettings.asset.tmp
+          mv ProjectSettings/ProjectSettings.asset.tmp ProjectSettings/ProjectSettings.asset
+          sed 's/webGLCompressionFormat: [0-9]/webGLCompressionFormat: 2/g' ProjectSettings/ProjectSettings.asset > ProjectSettings/ProjectSettings.asset.tmp
+          mv ProjectSettings/ProjectSettings.asset.tmp ProjectSettings/ProjectSettings.asset
 
       - name: Build project
         timeout-minutes: 45
