@@ -69,7 +69,8 @@ CI では次のように検証モードで実行できます。
 - `config/Directory.Build.props`: Analyzer DLL の参照設定
 - `config/Directory.Build.targets`: Rider / MSBuild 向けの C# 言語バージョン最終上書き
 - `config/FormatCheck.csproj`: `dotnet format` 用の共有プロジェクト
-- `.github/workflows/format-check.yml`: 各 Unity プロジェクトから呼ばれる reusable workflow
+- `.github/workflows/`: Unity プロジェクトから呼ばれる reusable workflow 群（フォーマット検証 / Unity テスト / WebGL ビルド & デプロイ / Steam デプロイ）。一覧と使い方は [`.github/workflows/README.md`](.github/workflows/README.md) を参照
+- `.github/actions/`: 上記 workflow 内で使う composite action 群（Unity セットアップ / WebGL ビルド / Discord 通知 / sops 復号）。詳細は [`.github/actions/README.md`](.github/actions/README.md)
 - `scripts/init-unity-project.sh`: 新規 Unity プロジェクト向け初期化スクリプト
 - `scripts/run-format.sh`: analyzers / whitespace / style をまとめて実行するスクリプト（CI 用の `--verify-no-changes` 対応）
 
