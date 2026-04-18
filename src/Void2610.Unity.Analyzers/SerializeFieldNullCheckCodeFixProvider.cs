@@ -32,6 +32,15 @@ namespace Void2610.Unity.Analyzers
 
             if (node.FirstAncestorOrSelf<IfStatementSyntax>() is { } ifStatement)
             {
+                // ブロック本体に複数ステートメントが含まれる if は auto-fix の対象外にする。
+                // 複数ステートメントの自動インライン化は親ブロック構造 (switch case や else 節内の if 等) との
+                // 組み合わせで意図せぬ改変を招くため、警告だけ残して開発者に明示的な判断を委ねる。
+                // 単一ステートメント / ブロックなし / else のみのケースは従来通り安全に unwrap する。
+                if (ShouldSkipIfStatementFix(ifStatement))
+                {
+                    return;
+                }
+
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "nullチェックを削除",
@@ -62,6 +71,23 @@ namespace Void2610.Unity.Analyzers
                         nameof(SerializeFieldNullCheckCodeFixProvider) + ".Coalesce"),
                     diagnostic);
             }
+        }
+
+        // 中括弧で囲まれたブロック本体 ({...}) を持つ if は auto-fix をスキップする。
+        // ブロックを自動 unwrap / 親ブロックへの複数ステートメント展開は、コメントや他の構造 (else 節・親スコープ等)
+        // との絡みで意図せぬ改変を起こしやすいため、警告だけ残して開発者に手動判断を委ねる。
+        // `if (cond) 単文;` のようなブロックなし形式は従来通り auto-fix の対象。
+        private static bool ShouldSkipIfStatementFix(IfStatementSyntax ifStatement)
+        {
+            if (ifStatement.Statement is BlockSyntax)
+            {
+                return true;
+            }
+            if (ifStatement.Else != null && ifStatement.Else.Statement is BlockSyntax)
+            {
+                return true;
+            }
+            return false;
         }
 
         private static async Task<Document> SimplifyIfStatementAsync(
