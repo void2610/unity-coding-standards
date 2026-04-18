@@ -1,0 +1,219 @@
+name: Shared WebGL Build GitHub Pages (Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      unity-version:
+        description: "Unity Editor のバージョン（例: 6000.3.10f1）"
+        required: true
+        type: string
+      execute-method:
+        description: "-executeMethod に渡すビルドメソッドの完全修飾名"
+        required: true
+        type: string
+      runner-labels:
+        description: "self-hosted runner のラベル配列（JSON 形式、例: [\"self-hosted\",\"macOS\"]）"
+        required: true
+        type: string
+      build-output-path:
+        description: "ビルド成果物の出力先パス"
+        required: false
+        type: string
+        default: CIBuilds/WebGL/build
+      publish-branch:
+        description: "GitHub Pages の公開ブランチ"
+        required: false
+        type: string
+        default: gh-pages
+      destination-dir:
+        description: "公開ブランチ内の配置先ディレクトリ（ルートに置く場合は空文字）"
+        required: false
+        type: string
+        default: ""
+      pages-url-base:
+        description: "通知に使う GitHub Pages のベースURL（末尾スラッシュなし）"
+        required: false
+        type: string
+        default: ""
+      nuget-restore-method:
+        description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
+        required: false
+        type: string
+        default: ""
+      nuget-packages-config:
+        description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
+        required: false
+        type: string
+        default: Assets/packages.config
+      pr-number:
+        description: "PR 番号（PR プレビュー通知を送る場合に指定）"
+        required: false
+        type: string
+        default: ""
+      pr-title:
+        description: "PR タイトル（PR プレビュー通知用）"
+        required: false
+        type: string
+        default: ""
+      pr-url:
+        description: "PR の URL（PR プレビュー通知用）"
+        required: false
+        type: string
+        default: ""
+      pr-head-sha:
+        description: "PR のヘッドコミット SHA（pull_request イベントでは github.sha がマージコミットになるため）"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+
+jobs:
+  build:
+    name: Build WebGL
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    env:
+      UNITY_VERSION: ${{ inputs.unity-version }}
+      UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+    steps:
+      - name: Setup Unity project
+        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
+        with:
+          unity-version: ${{ inputs.unity-version }}
+          nuget-restore-method: ${{ inputs.nuget-restore-method }}
+          nuget-packages-config: ${{ inputs.nuget-packages-config }}
+
+      - name: Build project
+        run: |
+          UNITY_PATH="/Applications/Unity/Hub/Editor/${UNITY_VERSION}/Unity.app/Contents/MacOS/Unity"
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget WebGL \
+            -executeMethod "${{ inputs.execute-method }}" \
+            -logFile -
+
+      - name: Deploy to GitHub Pages
+        timeout-minutes: 10
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GIT_TERMINAL_PROMPT: 0
+          PUBLISH_BRANCH: ${{ inputs.publish-branch }}
+          DESTINATION_DIR: ${{ inputs.destination-dir }}
+        run: |
+          DEPLOY_WORKTREE="${RUNNER_TEMP}/gh-pages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          REMOTE_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          rm -rf "$DEPLOY_WORKTREE"
+          if git ls-remote --exit-code --heads "$REMOTE_URL" "$PUBLISH_BRANCH" >/dev/null 2>&1; then
+            git clone --depth=1 --single-branch --branch "$PUBLISH_BRANCH" "$REMOTE_URL" "$DEPLOY_WORKTREE"
+          else
+            mkdir -p "$DEPLOY_WORKTREE"
+            git -C "$DEPLOY_WORKTREE" init
+            git -C "$DEPLOY_WORKTREE" checkout --orphan "$PUBLISH_BRANCH"
+            git -C "$DEPLOY_WORKTREE" remote add origin "$REMOTE_URL"
+          fi
+
+          if [ -n "$DESTINATION_DIR" ]; then
+            rm -rf "$DEPLOY_WORKTREE/$DESTINATION_DIR"
+            mkdir -p "$DEPLOY_WORKTREE/$DESTINATION_DIR"
+            cp -R "$UNITY_BUILD_OUTPUT_PATH"/. "$DEPLOY_WORKTREE/$DESTINATION_DIR/"
+          else
+            cp -R "$UNITY_BUILD_OUTPUT_PATH"/. "$DEPLOY_WORKTREE/"
+          fi
+
+          cd "$DEPLOY_WORKTREE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "GitHub Pages に変更はありません。"
+            exit 0
+          fi
+
+          git commit -m "deploy: ${GITHUB_SHA}"
+          git push origin "HEAD:$PUBLISH_BRANCH"
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_SHA: ${{ inputs.pr-head-sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          PAGES_URL_BASE: ${{ inputs.pages-url-base }}
+          DESTINATION_DIR: ${{ inputs.destination-dir }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_TITLE: ${{ inputs.pr-title }}
+          PR_URL: ${{ inputs.pr-url }}
+        run: |
+          # DISCORD_WEBHOOK_URL が未設定なら通知をスキップ
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL が設定されていないため通知をスキップします"
+            exit 0
+          fi
+
+          # pr-head-sha は shallow clone に含まれない場合があるため fetch する
+          if ! git cat-file -e "$COMMIT_SHA" 2>/dev/null; then
+            git fetch origin "$COMMIT_SHA" --depth=1
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+          COMMIT_MSG=$(git log -1 --format='%s' "$COMMIT_SHA")
+          AUTHOR=$(git log -1 --format='%an' "$COMMIT_SHA")
+          REPO_URL="https://github.com/${REPOSITORY}"
+
+          if [ -n "$PAGES_URL_BASE" ]; then
+            if [ -n "$DESTINATION_DIR" ]; then
+              DEPLOY_URL="${PAGES_URL_BASE}/${DESTINATION_DIR}/"
+            else
+              DEPLOY_URL="${PAGES_URL_BASE}/"
+            fi
+          else
+            DEPLOY_URL=""
+          fi
+
+          if [ -n "$PR_NUMBER" ]; then
+            PAYLOAD=$(jq -n \
+              --arg title "✅ PR Preview: #${PR_NUMBER}" \
+              --arg url "$DEPLOY_URL" \
+              --arg pr_title "$PR_TITLE" \
+              --arg preview "$DEPLOY_URL" \
+              --arg pr_link "[#${PR_NUMBER}]($PR_URL)" \
+              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+              --arg author "$AUTHOR" \
+              --arg commit_msg "$COMMIT_MSG" \
+              '{embeds: [{
+                title: $title,
+                url: $url,
+                description: ("🔍 **PR Preview**\n" + $pr_title),
+                color: 16753920,
+                fields: [
+                  {name: "Preview URL", value: $preview, inline: false},
+                  {name: "PR", value: $pr_link, inline: true},
+                  {name: "Commit", value: $commit, inline: true},
+                  {name: "Author", value: $author, inline: true},
+                  {name: "Latest Commit Message", value: $commit_msg, inline: false}
+                ]
+              }]}')
+          else
+            PAYLOAD=$(jq -n \
+              --arg title "WebGL Build Deployed" \
+              --arg url "$DEPLOY_URL" \
+              --arg desc "$COMMIT_MSG" \
+              --arg preview "$DEPLOY_URL" \
+              --arg repo "[$REPOSITORY]($REPO_URL)" \
+              --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+              --arg author "$AUTHOR" \
+              '{embeds: [{title: $title, url: $url, description: $desc, color: 3447003, fields: [
+                {name: "Preview", value: $preview, inline: false},
+                {name: "Repository", value: $repo, inline: false},
+                {name: "Commit", value: $commit, inline: true},
+                {name: "Author", value: $author, inline: true}
+              ]}]}')
+          fi
+
+          curl -sS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
