@@ -1,0 +1,143 @@
+name: Steamcmd Deploy
+description: |
+  self-hosted macOS ランナー上で steamcmd を直接実行し、Steam にビルドを
+  アップロードする。game-ci/steam-deploy は Linux 専用の Docker action の
+  ため macOS self-hosted では動かない。
+  depot ID は appId+1 (Windows) / appId+2 (Mac) の連番前提で VDF を生成する。
+
+inputs:
+  username:
+    description: "Steam ユーザー名"
+    required: true
+  config-vdf:
+    description: "2FA 済み config.vdf の base64 文字列。Steamworks の Build Account で取得"
+    required: true
+  app-id:
+    description: "Steam App ID。depot ID は appId+1 / appId+2 を自動採番"
+    required: true
+  root-path:
+    description: "各 depot のサブディレクトリを含む共通ルート"
+    required: false
+    default: builds
+  windows-depot-name:
+    description: "Windows 用 depot ルート配下のサブディレクトリ名"
+    required: false
+    default: StandaloneWindows64
+  mac-depot-name:
+    description: "Mac 用 depot ルート配下のサブディレクトリ名。空文字列だと Mac をスキップ"
+    required: false
+    default: StandaloneOSX
+  release-branch:
+    description: "Steam リリースブランチ（test / staging / '' でデフォルト）"
+    required: false
+    default: test
+  build-description:
+    description: "Steamworks に記録するビルド説明"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install steamcmd
+      shell: bash
+      run: |
+        # 以前のジョブでインストール済みなら再利用する。
+        STEAMCMD_DIR="$HOME/.steamcmd"
+        if [ ! -x "$STEAMCMD_DIR/steamcmd.sh" ]; then
+          mkdir -p "$STEAMCMD_DIR"
+          curl -sL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz \
+            | tar -xz -C "$STEAMCMD_DIR"
+        fi
+        echo "STEAMCMD=$STEAMCMD_DIR/steamcmd.sh" >> "$GITHUB_ENV"
+
+    - name: Restore Steam config
+      shell: bash
+      env:
+        CONFIG_VDF: ${{ inputs.config-vdf }}
+      run: |
+        # 2FA を回避するため、事前取得済みの config.vdf を復元する。
+        STEAM_CONFIG_DIR="$HOME/Library/Application Support/Steam/config"
+        mkdir -p "$STEAM_CONFIG_DIR"
+        echo "$CONFIG_VDF" | base64 -d > "$STEAM_CONFIG_DIR/config.vdf"
+        chmod 600 "$STEAM_CONFIG_DIR/config.vdf"
+
+    - name: Generate Steamworks VDF files
+      id: vdf
+      shell: bash
+      env:
+        APP_ID: ${{ inputs.app-id }}
+        ROOT_PATH: ${{ inputs.root-path }}
+        WINDOWS_DEPOT_NAME: ${{ inputs.windows-depot-name }}
+        MAC_DEPOT_NAME: ${{ inputs.mac-depot-name }}
+        RELEASE_BRANCH: ${{ inputs.release-branch }}
+        BUILD_DESCRIPTION: ${{ inputs.build-description }}
+      run: |
+        # app_build.vdf と depot_build_*.vdf を $RUNNER_TEMP/steamworks に生成する。
+        WORK_DIR="$RUNNER_TEMP/steamworks"
+        rm -rf "$WORK_DIR"
+        mkdir -p "$WORK_DIR"
+
+        emit_depot_vdf() {
+          local depot_id="$1"
+          local depot_name="$2"
+          cat > "$WORK_DIR/depot_build_${depot_id}.vdf" <<EOF
+        "DepotBuildConfig"
+        {
+          "DepotID" "${depot_id}"
+          "FileMapping"
+          {
+            "LocalPath" "${depot_name}/*"
+            "DepotPath" "."
+            "recursive" "1"
+          }
+          "FileExclusion" "*.pdb"
+        }
+        EOF
+        }
+
+        WINDOWS_DEPOT_ID=$((APP_ID + 1))
+        emit_depot_vdf "$WINDOWS_DEPOT_ID" "$WINDOWS_DEPOT_NAME"
+        DEPOTS_BLOCK="          \"${WINDOWS_DEPOT_ID}\" \"depot_build_${WINDOWS_DEPOT_ID}.vdf\""
+
+        if [ -n "$MAC_DEPOT_NAME" ]; then
+          MAC_DEPOT_ID=$((APP_ID + 2))
+          emit_depot_vdf "$MAC_DEPOT_ID" "$MAC_DEPOT_NAME"
+          DEPOTS_BLOCK+=$'\n'"          \"${MAC_DEPOT_ID}\" \"depot_build_${MAC_DEPOT_ID}.vdf\""
+        fi
+
+        # contentroot は absolute path にする。GITHUB_WORKSPACE 配下の相対パスを解決。
+        CONTENT_ROOT="$(cd "$GITHUB_WORKSPACE" && cd "$ROOT_PATH" && pwd)"
+
+        cat > "$WORK_DIR/app_build.vdf" <<EOF
+        "appbuild"
+        {
+          "appid" "${APP_ID}"
+          "desc" "${BUILD_DESCRIPTION}"
+          "buildoutput" "${WORK_DIR}/BuildOutput"
+          "contentroot" "${CONTENT_ROOT}"
+          "setlive" "${RELEASE_BRANCH}"
+          "preview" "0"
+          "local" ""
+          "depots"
+          {
+        ${DEPOTS_BLOCK}
+          }
+        }
+        EOF
+
+        echo "app_build.vdf:"
+        cat "$WORK_DIR/app_build.vdf"
+        echo "work-dir=$WORK_DIR" >> "$GITHUB_OUTPUT"
+
+    - name: Run steamcmd
+      shell: bash
+      env:
+        STEAM_USERNAME: ${{ inputs.username }}
+        STEAM_WORK_DIR: ${{ steps.vdf.outputs.work-dir }}
+      run: |
+        # 初回は steamcmd が自己アップデートで数分かかる。以降はキャッシュ利用。
+        "$STEAMCMD" \
+          +login "$STEAM_USERNAME" \
+          +run_app_build "$STEAM_WORK_DIR/app_build.vdf" \
+          +quit

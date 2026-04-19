@@ -19,16 +19,21 @@ on:
         description: "Mac ビルド用の -executeMethod に渡す完全修飾名（例: CiBuild.BuildMac）"
         required: true
         type: string
-      windows-build-path:
-        description: "Windows ビルド成果物のディレクトリ（artifact とする）"
+      root-path:
+        description: "Steam depot のコンテンツルート（CiBuild が出力するディレクトリの親）"
         required: false
         type: string
-        default: builds/StandaloneWindows64
-      mac-build-path:
-        description: "Mac ビルド成果物のディレクトリ（artifact とする）"
+        default: builds
+      windows-depot-name:
+        description: "Windows depot のサブディレクトリ名"
         required: false
         type: string
-        default: builds/StandaloneOSX
+        default: StandaloneWindows64
+      mac-depot-name:
+        description: "Mac depot のサブディレクトリ名"
+        required: false
+        type: string
+        default: StandaloneOSX
       release-branch:
         description: "Steam のリリースブランチ（test / staging / production など）"
         required: false
@@ -53,12 +58,24 @@ on:
         required: true
 
 jobs:
-  generate-version:
-    name: Generate Version
+  steam-deploy:
+    # build と deploy を単一ジョブで完結させる。別ジョブに分けると
+    # artifact upload/download が self-hosted → GitHub Azure Blob → self-hosted
+    # と往復して 30 分近くのロスになるため。
+    name: Build & Deploy to Steam
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
-    outputs:
-      version: ${{ steps.version.outputs.buildVersion }}
+    timeout-minutes: 90
+    env:
+      UNITY_VERSION: ${{ inputs.unity-version }}
     steps:
+      - name: Setup Unity project
+        id: setup
+        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
+        with:
+          unity-version: ${{ inputs.unity-version }}
+          nuget-restore-method: ${{ inputs.nuget-restore-method }}
+          nuget-packages-config: ${{ inputs.nuget-packages-config }}
+
       - name: Generate version string
         id: version
         env:
@@ -75,28 +92,12 @@ jobs:
           echo "buildVersion=${full_version}" >> "$GITHUB_OUTPUT"
           echo "Generated version: ${full_version}"
 
-  build-windows:
-    name: Build Windows
-    runs-on: ${{ fromJSON(inputs.runner-labels) }}
-    needs: generate-version
-    env:
-      UNITY_VERSION: ${{ inputs.unity-version }}
-    steps:
-      - name: Setup Unity project
-        id: setup
-        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
-        with:
-          unity-version: ${{ inputs.unity-version }}
-          nuget-restore-method: ${{ inputs.nuget-restore-method }}
-          nuget-packages-config: ${{ inputs.nuget-packages-config }}
-
       - name: Build Windows
-        timeout-minutes: 60
+        timeout-minutes: 45
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
-          BUILD_VERSION: ${{ needs.generate-version.outputs.version }}
+          BUILD_VERSION: ${{ steps.version.outputs.buildVersion }}
         run: |
-          # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
           rm -f Temp/UnityLockfile
           "$UNITY_PATH" \
             -batchmode \
@@ -107,35 +108,12 @@ jobs:
             -executeMethod "${{ inputs.windows-execute-method }}" \
             -logFile -
 
-      - name: Upload Windows build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: ${{ inputs.windows-build-path }}
-          retention-days: 1
-
-  build-mac:
-    name: Build Mac
-    runs-on: ${{ fromJSON(inputs.runner-labels) }}
-    needs: generate-version
-    env:
-      UNITY_VERSION: ${{ inputs.unity-version }}
-    steps:
-      - name: Setup Unity project
-        id: setup
-        uses: void2610/unity-coding-standards/.github/actions/setup-unity-project@main
-        with:
-          unity-version: ${{ inputs.unity-version }}
-          nuget-restore-method: ${{ inputs.nuget-restore-method }}
-          nuget-packages-config: ${{ inputs.nuget-packages-config }}
-
       - name: Build Mac
-        timeout-minutes: 60
+        timeout-minutes: 45
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
-          BUILD_VERSION: ${{ needs.generate-version.outputs.version }}
+          BUILD_VERSION: ${{ steps.version.outputs.buildVersion }}
         run: |
-          # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
           rm -f Temp/UnityLockfile
           "$UNITY_PATH" \
             -batchmode \
@@ -146,42 +124,14 @@ jobs:
             -executeMethod "${{ inputs.mac-execute-method }}" \
             -logFile -
 
-      - name: Upload Mac build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-build
-          path: ${{ inputs.mac-build-path }}
-          retention-days: 1
-
-  deploy-steam:
-    name: Deploy to Steam
-    needs: [generate-version, build-windows, build-mac]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-build
-          path: builds/StandaloneWindows64
-
-      - name: Download Mac build
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-build
-          path: builds/StandaloneOSX
-
-      - name: Get short SHA
-        id: short_sha
-        run: echo "sha_short=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
-
       - name: Deploy to Steam
-        uses: game-ci/steam-deploy@v3
+        uses: void2610/unity-coding-standards/.github/actions/steamcmd-deploy@main
         with:
           username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: ${{ secrets.STEAM_APP_ID }}
-          buildDescription: "auto deploy via github actions (${{ steps.short_sha.outputs.sha_short }}) v${{ needs.generate-version.outputs.version }}"
-          rootPath: builds
-          depot1Path: StandaloneWindows64
-          depot2Path: StandaloneOSX
-          releaseBranch: ${{ inputs.release-branch }}
+          config-vdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          app-id: ${{ secrets.STEAM_APP_ID }}
+          root-path: ${{ inputs.root-path }}
+          windows-depot-name: ${{ inputs.windows-depot-name }}
+          mac-depot-name: ${{ inputs.mac-depot-name }}
+          release-branch: ${{ inputs.release-branch }}
+          build-description: "auto deploy via github actions (${{ steps.version.outputs.buildVersion }})"
