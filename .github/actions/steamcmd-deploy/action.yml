@@ -54,7 +54,7 @@ runs:
         # steamcmd の macOS バイナリは x86_64 のみ。Apple Silicon では
         # Rosetta 2 経由で起動する必要があるため事前にインストールされているか検証する。
         if [ "$(uname -m)" = "arm64" ]; then
-          if ! /usr/bin/pgrep -q oahd && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+          if ! /usr/bin/pgrep -q oahd && ! /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
             echo "::error::Rosetta 2 がランナーに入っていません。'softwareupdate --install-rosetta --agree-to-license' を一度実行してください。"
             exit 1
           fi
@@ -145,10 +145,10 @@ runs:
         STEAM_USERNAME: ${{ inputs.username }}
         STEAM_WORK_DIR: ${{ steps.vdf.outputs.work-dir }}
       run: |
-        # steamcmd 本体は x86_64 バイナリなので Apple Silicon では arch -x86_64 で起動する。
+        # steamcmd 本体は x86_64 バイナリなので Apple Silicon では /usr/bin/arch -x86_64 で起動する。
         # Intel Mac ならそのまま実行しても挙動は変わらない。
         if [ "$(uname -m)" = "arm64" ]; then
-          STEAMCMD_INVOKE=(arch -x86_64 "$STEAMCMD")
+          STEAMCMD_INVOKE=(/usr/bin/arch -x86_64 "$STEAMCMD")
         else
           STEAMCMD_INVOKE=("$STEAMCMD")
         fi
