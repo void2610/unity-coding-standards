@@ -92,6 +92,43 @@ jobs:
           execute-method: ${{ inputs.execute-method }}
           build-output-path: ${{ inputs.build-output-path }}
 
+      - name: Generate Netlify _headers
+        env:
+          UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+        run: |
+          # Brotli/Gzip 圧縮済み WebGL 成果物をブラウザにネイティブ解凍させるため、
+          # Content-Encoding と Content-Type を明示する。未設定だと loader.js が
+          # JS で解凍し、起動が目に見えて遅くなる。
+          cat > "${UNITY_BUILD_OUTPUT_PATH}/_headers" <<'HEADERS'
+          /Build/*.data.unityweb
+            Content-Encoding: br
+            Content-Type: application/octet-stream
+          /Build/*.wasm.unityweb
+            Content-Encoding: br
+            Content-Type: application/wasm
+          /Build/*.framework.js.unityweb
+            Content-Encoding: br
+            Content-Type: application/javascript
+          /Build/*.data.br
+            Content-Encoding: br
+            Content-Type: application/octet-stream
+          /Build/*.wasm.br
+            Content-Encoding: br
+            Content-Type: application/wasm
+          /Build/*.framework.js.br
+            Content-Encoding: br
+            Content-Type: application/javascript
+          /Build/*.data.gz
+            Content-Encoding: gzip
+            Content-Type: application/octet-stream
+          /Build/*.wasm.gz
+            Content-Encoding: gzip
+            Content-Type: application/wasm
+          /Build/*.framework.js.gz
+            Content-Encoding: gzip
+            Content-Type: application/javascript
+          HEADERS
+
       - name: Decrypt secrets
         id: secrets
         uses: void2610/unity-coding-standards/.github/actions/decrypt-secrets@main
