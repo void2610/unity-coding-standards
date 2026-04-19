@@ -51,6 +51,15 @@ runs:
         fi
         echo "STEAMCMD=$STEAMCMD_DIR/steamcmd.sh" >> "$GITHUB_ENV"
 
+        # steamcmd の macOS バイナリは x86_64 のみ。Apple Silicon では
+        # Rosetta 2 経由で起動する必要があるため事前にインストールされているか検証する。
+        if [ "$(uname -m)" = "arm64" ]; then
+          if ! /usr/bin/pgrep -q oahd && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "::error::Rosetta 2 がランナーに入っていません。'softwareupdate --install-rosetta --agree-to-license' を一度実行してください。"
+            exit 1
+          fi
+        fi
+
     - name: Restore Steam config
       shell: bash
       env:
@@ -136,8 +145,16 @@ runs:
         STEAM_USERNAME: ${{ inputs.username }}
         STEAM_WORK_DIR: ${{ steps.vdf.outputs.work-dir }}
       run: |
+        # steamcmd 本体は x86_64 バイナリなので Apple Silicon では arch -x86_64 で起動する。
+        # Intel Mac ならそのまま実行しても挙動は変わらない。
+        if [ "$(uname -m)" = "arm64" ]; then
+          STEAMCMD_INVOKE=(arch -x86_64 "$STEAMCMD")
+        else
+          STEAMCMD_INVOKE=("$STEAMCMD")
+        fi
+
         # 初回は steamcmd が自己アップデートで数分かかる。以降はキャッシュ利用。
-        "$STEAMCMD" \
+        "${STEAMCMD_INVOKE[@]}" \
           +login "$STEAM_USERNAME" \
           +run_app_build "$STEAM_WORK_DIR/app_build.vdf" \
           +quit
