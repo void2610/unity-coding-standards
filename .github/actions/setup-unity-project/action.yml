@@ -56,18 +56,45 @@ runs:
       env:
         UNITY_PATH: ${{ steps.verify.outputs.unity-path }}
       run: |
-        # packages.config のハッシュを前回復元時と比較し、変更がなければスキップする。
-        # セルフホストランナーでは Assets/Packages/ がディスクに残るため、
-        # 依存が変わっていなければ毎回 Unity を起動する必要はない。
+        # packages.config の hash と、Assets/Packages/ 配下の実体パッケージの両方を見て
+        # 復元が必要か判定する。hash だけで判定すると、過去に復元失敗状態のまま hash が
+        # 保存されたランナーで以降ずっと復元がスキップされ続ける問題が起きる。
         HASH_FILE="$GITHUB_WORKSPACE/.nuget-restore-hash"
-        CURRENT_HASH=$(shasum "$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}" 2>/dev/null | cut -d' ' -f1 || echo "none")
+        CONFIG_PATH="$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}"
+        CURRENT_HASH=$(shasum "$CONFIG_PATH" 2>/dev/null | cut -d' ' -f1 || echo "none")
+
+        # packages.config に書かれた全パッケージが Assets/Packages/<id>.<version>/ に
+        # 実在するかを検証する関数。欠損があれば MISSING に改行区切りで詰める。
+        validate_packages() {
+          MISSING=""
+          while IFS= read -r line; do
+            case "$line" in
+              *"<package"*) ;;
+              *) continue ;;
+            esac
+            PKG_ID=$(printf '%s' "$line" | sed -E 's/.*id="([^"]+)".*/\1/')
+            PKG_VER=$(printf '%s' "$line" | sed -E 's/.*version="([^"]+)".*/\1/')
+            if [ -z "$PKG_ID" ] || [ -z "$PKG_VER" ]; then
+              continue
+            fi
+            if [ ! -d "$GITHUB_WORKSPACE/Assets/Packages/${PKG_ID}.${PKG_VER}" ]; then
+              MISSING="${MISSING}  - ${PKG_ID}.${PKG_VER}"$'\n'
+            fi
+          done < "$CONFIG_PATH"
+        }
 
         if [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$CURRENT_HASH" ]; then
-          echo "packages.config に変更なし — NuGet 復元をスキップします。"
-          exit 0
+          # hash 一致時も、Assets/Packages/ の整合性は一度確認する。
+          validate_packages
+          if [ -z "$MISSING" ]; then
+            echo "packages.config と Assets/Packages/ の内容が一致 — NuGet 復元をスキップします。"
+            exit 0
+          fi
+          echo "::warning::hash は一致しているが Assets/Packages/ が不完全。強制的に NuGet 復元を実行します。"
+          printf '%b' "$MISSING"
+        else
+          echo "packages.config が変更されたため NuGet 復元を実行します。"
         fi
-
-        echo "packages.config が変更されたため NuGet 復元を実行します。"
 
         # 手順:
         #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する
@@ -94,27 +121,9 @@ runs:
         echo "::endgroup::"
 
         # Unity を -ignoreCompilerErrors 付きで起動しているため、executeMethod が内部で
-        # 失敗しても exit 0 が返る。hash を保存する前に packages.config の全パッケージが
-        # Assets/Packages/<id>.<version>/ として実在することを確認する。
+        # 失敗しても exit 0 が返る。hash を保存する前に実体の存在を再チェックする。
         echo "::group::Validate restored packages"
-        MISSING=""
-        CONFIG_PATH="$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}"
-        while IFS= read -r line; do
-          # <package id="..." version="..." /> の行だけを対象にする。
-          case "$line" in
-            *"<package"*) ;;
-            *) continue ;;
-          esac
-          PKG_ID=$(printf '%s' "$line" | sed -E 's/.*id="([^"]+)".*/\1/')
-          PKG_VER=$(printf '%s' "$line" | sed -E 's/.*version="([^"]+)".*/\1/')
-          if [ -z "$PKG_ID" ] || [ -z "$PKG_VER" ]; then
-            continue
-          fi
-          if [ ! -d "$GITHUB_WORKSPACE/Assets/Packages/${PKG_ID}.${PKG_VER}" ]; then
-            MISSING="${MISSING}  - ${PKG_ID}.${PKG_VER}"$'\n'
-          fi
-        done < "$CONFIG_PATH"
-
+        validate_packages
         if [ -n "$MISSING" ]; then
           echo "::error::NuGet 復元が不完全です。以下のパッケージが Assets/Packages/ に存在しません:"
           printf '%b' "$MISSING"
