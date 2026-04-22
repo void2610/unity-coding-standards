@@ -93,5 +93,35 @@ runs:
           -logFile -
         echo "::endgroup::"
 
-        # 復元成功時のみハッシュを保存する。
+        # Unity を -ignoreCompilerErrors 付きで起動しているため、executeMethod が内部で
+        # 失敗しても exit 0 が返る。hash を保存する前に packages.config の全パッケージが
+        # Assets/Packages/<id>.<version>/ として実在することを確認する。
+        echo "::group::Validate restored packages"
+        MISSING=""
+        CONFIG_PATH="$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}"
+        while IFS= read -r line; do
+          # <package id="..." version="..." /> の行だけを対象にする。
+          case "$line" in
+            *"<package"*) ;;
+            *) continue ;;
+          esac
+          PKG_ID=$(printf '%s' "$line" | sed -E 's/.*id="([^"]+)".*/\1/')
+          PKG_VER=$(printf '%s' "$line" | sed -E 's/.*version="([^"]+)".*/\1/')
+          if [ -z "$PKG_ID" ] || [ -z "$PKG_VER" ]; then
+            continue
+          fi
+          if [ ! -d "$GITHUB_WORKSPACE/Assets/Packages/${PKG_ID}.${PKG_VER}" ]; then
+            MISSING="${MISSING}  - ${PKG_ID}.${PKG_VER}"$'\n'
+          fi
+        done < "$CONFIG_PATH"
+
+        if [ -n "$MISSING" ]; then
+          echo "::error::NuGet 復元が不完全です。以下のパッケージが Assets/Packages/ に存在しません:"
+          printf '%b' "$MISSING"
+          # hash を更新せずに失敗扱いにすることで、次回の CI 実行でも再度復元が試みられる。
+          exit 1
+        fi
+        echo "::endgroup::"
+
+        # 復元が実際に成功した場合のみハッシュを保存し、次回以降のスキップを許可する。
         echo "$CURRENT_HASH" > "$HASH_FILE"
