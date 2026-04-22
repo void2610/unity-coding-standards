@@ -68,12 +68,15 @@ runs:
         validate_packages() {
           MISSING=""
           while IFS= read -r line; do
+            # <package id="..." version="..." /> の行だけを対象にする。
+            # ルートタグ <packages> と区別するため `<package id=` を厳密にマッチさせる。
             case "$line" in
-              *"<package"*) ;;
+              *"<package id="*) ;;
               *) continue ;;
             esac
-            PKG_ID=$(printf '%s' "$line" | sed -E 's/.*id="([^"]+)".*/\1/')
-            PKG_VER=$(printf '%s' "$line" | sed -E 's/.*version="([^"]+)".*/\1/')
+            # sed -n ... p で、パターン不一致時は何も出力しない（= 空文字）。
+            PKG_ID=$(printf '%s' "$line" | sed -nE 's/.*id="([^"]+)".*/\1/p')
+            PKG_VER=$(printf '%s' "$line" | sed -nE 's/.*version="([^"]+)".*/\1/p')
             if [ -z "$PKG_ID" ] || [ -z "$PKG_VER" ]; then
               continue
             fi
