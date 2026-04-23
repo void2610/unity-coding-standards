@@ -59,6 +59,11 @@ on:
         required: false
         type: string
         default: ""
+      notify-discord:
+        description: "Discord 通知を送るかどうか。false にするとビルド・デプロイのみ行う（PR の 2 回目以降の push で重複通知を避ける用途）"
+        required: false
+        type: boolean
+        default: true
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -125,6 +130,7 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
+        if: ${{ inputs.notify-discord }}
         uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
         with:
           discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
