@@ -92,7 +92,7 @@ main() {
     dotnet format analyzers "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --severity warn --verbosity diagnostic
 
     echo "run: dotnet format whitespace ${FORMAT_PROJECT} ${verify_flag} --verbosity diagnostic"
-    dotnet format whitespace "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --severity warn --verbosity diagnostic
+    dotnet format whitespace "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --verbosity diagnostic
 
     echo "run: dotnet format style ${FORMAT_PROJECT} ${verify_flag} --severity warn --verbosity diagnostic"
     dotnet format style "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --severity warn --verbosity diagnostic
