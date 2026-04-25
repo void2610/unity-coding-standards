@@ -39,12 +39,26 @@ ensure_project_root() {
 }
 
 build_analyzer() {
-    # analyzer DLL のバージョンが古いと CI と検出ルールが食い違うため、毎回 Release ビルドして揃える。
-    # CI の format-check ワークフローと同じステップをローカルでも踏むことで、CI 固有の警告漏れを防ぐ。
+    # analyzer DLL のバージョンが古いと CI と検出ルールが食い違うため、必要時に Release ビルドで揃える。
+    # 既に DLL が最新ソースより新しい場合はスキップして、毎回の起動コストを抑える。
     if [[ ! -f "${ANALYZER_PROJECT}" ]]; then
         echo "error: analyzer プロジェクトが見つかりません: ${ANALYZER_PROJECT}" >&2
         echo "       unity-coding-standards サブモジュールが正しくチェックアウトされているか確認してください。" >&2
         exit 1
+    fi
+
+    local analyzer_dir
+    analyzer_dir="$(dirname "${ANALYZER_PROJECT}")"
+    local dll_path="${analyzer_dir}/bin/Release/netstandard2.0/Void2610.Unity.Analyzers.dll"
+
+    # DLL が存在し、配下に DLL より新しいソースが 1 件も無ければビルドをスキップする。
+    if [[ -f "${dll_path}" ]]; then
+        local newer_src
+        newer_src="$(find "${analyzer_dir}" \( -name '*.cs' -o -name '*.csproj' \) -newer "${dll_path}" -print -quit 2>/dev/null || true)"
+        if [[ -z "${newer_src}" ]]; then
+            echo "skip: analyzer は最新ビルド済み (${dll_path})"
+            return
+        fi
     fi
 
     echo "run: dotnet build ${ANALYZER_PROJECT} -c Release"
