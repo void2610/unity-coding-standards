@@ -3,6 +3,12 @@ name: Shared Format
 on:
   workflow_call:
 
+# 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
+# main / develop への直接 push（pull_request 以外）はキャンセルしない。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   format-check:
     name: Run
