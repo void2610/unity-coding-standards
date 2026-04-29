@@ -19,6 +19,7 @@ submodule at `./unity-coding-standards`.
 
 What it does:
   - creates symlinks for `.editorconfig`, `Directory.Build.props`, `Directory.Build.targets`, `FormatCheck.csproj`
+  - creates a symlink for `.github/CODEOWNERS`
   - creates `.github/workflows/format-check.yml` for the shared reusable workflow
   - optionally builds the analyzer DLL
 
@@ -63,6 +64,9 @@ ensure_link_target() {
         echo "error: ${destination} が既に存在します。初期化専用スクリプトのため既存ファイルは上書きしません。" >&2
         exit 1
     fi
+
+    # destination がサブディレクトリ配下のときは親を作っておく
+    mkdir -p "$(dirname "${destination}")"
 
     ln -s "${expected_target}" "${destination}"
     echo "linked: ${destination} -> ${expected_target}"
@@ -154,6 +158,8 @@ main() {
     ensure_link_target "Directory.Build.props" "${SUBMODULE_DIR_NAME}/config/Directory.Build.props"
     ensure_link_target "Directory.Build.targets" "${SUBMODULE_DIR_NAME}/config/Directory.Build.targets"
     ensure_link_target "FormatCheck.csproj" "${SUBMODULE_DIR_NAME}/config/FormatCheck.csproj"
+    # CODEOWNERS は .github 配下に配置する必要があるため、親ディレクトリ相対の symlink にする
+    ensure_link_target ".github/CODEOWNERS" "../${SUBMODULE_DIR_NAME}/config/CODEOWNERS"
     ensure_workflow_file
 
     if [[ "${build_analyzer}" == true ]]; then
