@@ -50,9 +50,7 @@ on:
         type: string
         default: Assets/packages.config
     secrets:
-      STEAM_USERNAME:
-        required: true
-      STEAM_CONFIG_VDF:
+      SOPS_AGE_KEY:
         required: true
       STEAM_APP_ID:
         required: true
@@ -124,11 +122,17 @@ jobs:
             -executeMethod "${{ inputs.mac-execute-method }}" \
             -logFile -
 
+      - name: Decrypt secrets
+        id: secrets
+        uses: void2610/unity-coding-standards/.github/actions/decrypt-secrets@main
+        with:
+          sops-age-key: ${{ secrets.SOPS_AGE_KEY }}
+
       - name: Deploy to Steam
         uses: void2610/unity-coding-standards/.github/actions/steamcmd-deploy@main
         with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          config-vdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          username: ${{ steps.secrets.outputs.steam-username }}
+          config-vdf: ${{ steps.secrets.outputs.steam-config-vdf }}
           app-id: ${{ secrets.STEAM_APP_ID }}
           root-path: ${{ inputs.root-path }}
           windows-depot-name: ${{ inputs.windows-depot-name }}
