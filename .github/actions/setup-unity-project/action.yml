@@ -35,6 +35,12 @@ runs:
         # git 管理外ファイルをビルドキャッシュとして保持するため clean を無効にする。
         clean: false
 
+    - name: Remove stale Unity lockfile
+      shell: bash
+      run: |
+        # 前回のCIが異常終了した場合にロックファイルが残り、次のUnity起動がブロックされるのを防ぐ。
+        rm -f "$GITHUB_WORKSPACE/Temp/UnityLockfile"
+
     - name: Verify Unity installation
       id: verify
       shell: bash
