@@ -7,7 +7,6 @@ void2610 の Unity プロジェクトから `uses:` で呼び出すことを想�
 | [`ci.yml`](ci.yml) | このリポジトリ自身の Analyzer ビルド・テスト | self-hosted |
 | [`format-check.yml`](format-check.yml) | `dotnet format` の verify 実行 | self-hosted |
 | [`unity-test.yml`](unity-test.yml) / [`unity-test-self-hosted.yml`](unity-test-self-hosted.yml) | Unity Test Runner の実行 | GitHub-hosted / self-hosted |
-| [`unity-scenario-self-hosted.yml`](unity-scenario-self-hosted.yml) | LiminalPalette `[ConsoleScenario]` を batch mode で実行 | self-hosted |
 | [`steam-deploy.yml`](steam-deploy.yml) / [`steam-deploy-self-hosted.yml`](steam-deploy-self-hosted.yml) | Mac/Win ビルド + Steam アップロード | GitHub-hosted / self-hosted |
 | [`webgl-build-self-hosted.yml`](webgl-build-self-hosted.yml) | WebGL ビルド → **Cloudflare Pages** デプロイ | self-hosted |
 | [`webgl-build-github-pages-self-hosted.yml`](webgl-build-github-pages-self-hosted.yml) | WebGL ビルド → **GitHub Pages (gh-pages ブランチ push)** デプロイ | self-hosted |
