@@ -40,8 +40,12 @@ on:
 
 # 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
 # main / develop への直接 push（pull_request 以外）はキャンセルしない。
+#
+# group に test-mode を含めることで、同一呼び出し側 workflow から EditMode / PlayMode を
+# 並べて呼んだときに互いに cancel し合うのを防ぐ (例: jobs.test-editmode と jobs.test-playmode
+# が両方この reusable を呼ぶ構成)。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.test-mode }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
