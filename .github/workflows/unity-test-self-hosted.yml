@@ -37,6 +37,23 @@ on:
         required: false
         type: string
         default: Assets/packages.config
+      nographics:
+        description: |
+          true (既定) で `-nographics` を Unity に渡す。
+          false にすると graphics device を初期化する (UI Toolkit / EditorWindow に
+          依存するテストはこちらが必要)。GitHub-hosted runner や display 無しの
+          self-hosted runner は true のままにする。
+        required: false
+        type: boolean
+        default: true
+      fail-on-test-failures:
+        description: |
+          true (既定) で Unity の `-runTests` が exit code 2 (テスト失敗) を返したら
+          ジョブも失敗扱いにする。後方互換のため呼び出し側で false に設定すれば
+          従来の warning-only 挙動に戻せる。
+        required: false
+        type: boolean
+        default: true
 
 # 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
 # main / develop への直接 push（pull_request 以外）はキャンセルしない。
@@ -67,14 +84,24 @@ jobs:
       - name: Run Unity tests
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
+          NOGRAPHICS: ${{ inputs.nographics }}
         run: |
           # パッケージ解決済みの状態でテストを実行する。
           # -runTests は終了コード 0=成功, 2=テスト失敗, それ以外=エラー として返す。
           mkdir -p "$(dirname "$TEST_RESULTS_PATH")"
           EXIT_CODE=0
+
+          # `-nographics` の有無は input でスイッチ。UI Toolkit / EditorWindow に
+          # 依存するテスト (Build / Show 等) は graphics device 初期化が必要。
+          # display を持つ self-hosted runner では false にできる。
+          NOGRAPHICS_FLAG=""
+          if [ "$NOGRAPHICS" = "true" ]; then
+            NOGRAPHICS_FLAG="-nographics"
+          fi
+
           "$UNITY_PATH" \
             -batchmode \
-            -nographics \
+            $NOGRAPHICS_FLAG \
             -projectPath "$GITHUB_WORKSPACE" \
             -runTests \
             -testPlatform "${{ inputs.test-mode }}" \
@@ -84,7 +111,15 @@ jobs:
           if [ "$EXIT_CODE" -eq 0 ]; then
             echo "All tests passed."
           elif [ "$EXIT_CODE" -eq 2 ]; then
-            echo "::warning::Some tests failed (exit code 2)."
+            # Unity の `-runTests` は 1 件以上のテスト失敗で 2 を返す。
+            # fail-on-test-failures=true (既定) で job も失敗にして CI ログから即座に検知できるようにする。
+            # false にすると従来の warning-only 挙動に戻せる (移行期間用)。
+            if [ "${{ inputs.fail-on-test-failures }}" = "true" ]; then
+              echo "::error::Some tests failed (exit code 2)."
+              exit 2
+            else
+              echo "::warning::Some tests failed (exit code 2)."
+            fi
           else
             echo "::error::Unity exited with unexpected code $EXIT_CODE"
             exit "$EXIT_CODE"
