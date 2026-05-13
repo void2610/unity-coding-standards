@@ -9,7 +9,10 @@ inputs:
     description: Unity Editor のバージョン
     required: true
   nuget-restore-method:
-    description: "NuGet 復元用の -executeMethod に渡す完全修飾メソッド名（空文字列でスキップ）"
+    description: |
+      非空なら NuGet 復元を行う (具体的なメソッド名は後方互換のため受けるだけで未使用)。
+      復元は NuGetForUnity.Cli (dotnet tool) を使って Unity 起動前に行うため、
+      従来の Unity -executeMethod 経由は呼び出さない。
     required: false
     default: ""
   nuget-packages-config:
@@ -105,32 +108,33 @@ runs:
           echo "packages.config が変更されたため NuGet 復元を実行します。"
         fi
 
-        # 手順:
-        #   1. -ignoreCompilerErrors + -executeMethod で DLL を復元する
-        #   2. 復元した DLL を反映するため再度 Unity を起動して再コンパイルする
-        echo "::group::NuGet restore"
-        "$UNITY_PATH" \
-          -batchmode \
-          -quit \
-          -nographics \
-          -ignoreCompilerErrors \
-          -projectPath "$GITHUB_WORKSPACE" \
-          -executeMethod "${{ inputs.nuget-restore-method }}" \
-          -logFile -
+        # NuGetForUnity.Cli を使って Unity を介さず NuGet パッケージを復元する。
+        #
+        # 従来は Unity -executeMethod NuGetRestore.Restore に依存していたが、
+        # cold-cache の self-hosted runner で chicken-and-egg を引き起こしていた:
+        #   - LitMotion / ZLogger.Unity 等が R3 拡張で precompiled R3.dll に依存
+        #   - R3.dll は NuGet パッケージなので復元前は missing
+        #   - 上流 asmdef の compile が失敗
+        #   - Bee の dependency tracking が下流 asmdef (= NuGetRestore クラスを含む
+        #     Editor アセンブリ) の compile を skip
+        #   - Unity が executeMethod のクラスを load できず "class not found" で abort
+        #   - 復元が走らないまま終了 → 次回 CI も同じ状態でループ
+        # CLI 経由なら Unity の compile graph に一切依存せず Assets/Packages/ を
+        # 正しい .meta (RoslynAnalyzer label 等) 付きで埋められる。
+        echo "::group::NuGet restore (NuGetForUnity.Cli)"
+        # dotnet グローバルツールの PATH を有効化。
+        # 初回の install 時のみ PATH を export する必要があるため、明示的に追加。
+        export PATH="$HOME/.dotnet/tools:$PATH"
+        if ! command -v nugetforunity >/dev/null 2>&1; then
+          echo "dotnet tool install --global NuGetForUnity.Cli"
+          dotnet tool install --global NuGetForUnity.Cli
+        else
+          # 既存ツールが古いと最新の packages.config 仕様に追従できない場合があるため update も試みる。
+          dotnet tool update --global NuGetForUnity.Cli 2>/dev/null || true
+        fi
+        nugetforunity restore "$GITHUB_WORKSPACE"
         echo "::endgroup::"
 
-        echo "::group::Recompile after restore"
-        "$UNITY_PATH" \
-          -batchmode \
-          -quit \
-          -nographics \
-          -ignoreCompilerErrors \
-          -projectPath "$GITHUB_WORKSPACE" \
-          -logFile -
-        echo "::endgroup::"
-
-        # Unity を -ignoreCompilerErrors 付きで起動しているため、executeMethod が内部で
-        # 失敗しても exit 0 が返る。hash を保存する前に実体の存在を再チェックする。
         echo "::group::Validate restored packages"
         validate_packages
         if [ -n "$MISSING" ]; then
