@@ -145,6 +145,25 @@ runs:
         nugetforunity restore "$GITHUB_WORKSPACE"
         echo "::endgroup::"
 
+        # Unity を一度起動して、CLI で並べた DLL の .meta を AssetDatabase に取り込む。
+        # これをやらずに後続の WebGL build step に直接行くと、Unity 初回起動時に
+        #   - .dll の import
+        #   - 全 asmdef の compile
+        # が並行で走り、source generator DLL の RoslynAnalyzer label 解決が
+        # csc invocation に間に合わないケースがある (Effects.dll の `MapTo` が
+        # ソースジェネレートされず "MapTo does not exist" になる)。
+        # warm-up 用にここで一度起動して、import と初回 compile を済ませる。
+        echo "::group::Warm-up Unity (asset import + first compile)"
+        "$UNITY_PATH" \
+          -batchmode \
+          -quit \
+          -nographics \
+          -projectPath "$GITHUB_WORKSPACE" \
+          -logFile - || {
+            echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
+          }
+        echo "::endgroup::"
+
         echo "::group::Validate restored packages"
         validate_packages
         if [ -n "$MISSING" ]; then
