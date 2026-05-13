@@ -44,6 +44,16 @@ runs:
         # 前回のCIが異常終了した場合にロックファイルが残り、次のUnity起動がブロックされるのを防ぐ。
         rm -f "$GITHUB_WORKSPACE/Temp/UnityLockfile"
 
+    - name: Setup .NET SDK
+      # NuGetForUnity.Cli は dotnet グローバルツール。self-hosted runner には
+      # .NET SDK が常駐していないため、ここで明示的に入れる。
+      # format-check ワークフローが書き出した global.json (rollForward=disable, 8.0.123)
+      # がワークスペースに残り得るため、それに揃えて 8.0.123 を install する。
+      if: inputs.nuget-restore-method != ''
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.123
+
     - name: Verify Unity installation
       id: verify
       shell: bash
