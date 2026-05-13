@@ -1,6 +1,9 @@
-# LiminalPalette（ゲームプレイ自動操作 / `liminal-*`）
+# LiminalPalette（汎用デバッグコンソール・またはそのコマンド群を呼び出す手段 / `liminal-*`）
 
-ゲーム内の `[LiminalCommand]` / `[LiminalScenario]` / `[LiminalObservableField]` を HTTP API 経由で直接叩くための `liminal-*` skill 群。**`uloop-execute-dynamic-code` でゴリ押しする前に、まず該当する LiminalCommand があるかを必ず確認する**。
+LiminalPaletteはUnityに汎用デバッグコンソールを追加し、特定の属性をつけたゲーム内APIをコマンドという単位で簡単に実行することができるOSSライブラリである。
+エディタウィンドウ・ランタイムUI・liminal-cli(HTTP API経由)でコマンドを実行したりその結果、ログ等を確認することができる。
+ゲーム内の `[LiminalCommand]` / `[LiminalScenario]` / `[LiminalObservableField]` を HTTP API 経由で直接叩くための `liminal-*` skill 群が提供されている。
+**`uloop-execute-dynamic-code` でゴリ押しする前に、まず該当する LiminalCommand があるかを必ず確認する**。
 
 > **LiminalPalette はこのリポジトリのオーナー (void2610) 自身が開発しているライブラリ。**
 > 使い勝手が悪い・API が足りない・バグっぽい挙動がある等の問題に当たった場合は、クライアント側（このゲーム側）で workaround を組む前に、**ライブラリ側の修正・API 追加を提案 / 実施する選択肢も常に検討する**こと。属性が無いから叩けない、引数の型変換が回りくどい、scenario の表現力が足りない、といった話は基本的にライブラリ側で直すほうが筋がよい。
