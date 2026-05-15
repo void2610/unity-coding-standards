@@ -118,11 +118,14 @@ jobs:
         run: |
           if [ -n "$PR_NUMBER" ]; then
             # Cloudflare Pages の プレビュー URL 用にブランチ名をサニタイズする
+            # Cloudflare Pages はサブドメイン部分を最大 28 文字に切り詰めるため、末尾のハイフンも除去する
             SANITIZED_BRANCH=$(echo "$DEPLOY_BRANCH" \
               | tr '[:upper:]' '[:lower:]' \
               | sed 's/[^a-z0-9]/-/g' \
               | sed 's/--*/-/g' \
-              | sed 's/^-\|-$//g')
+              | sed 's/^-\|-$//g' \
+              | cut -c1-28 \
+              | sed 's/-*$//') # cut によって末尾にハイフンが生じた場合に除去
             URL="https://${SANITIZED_BRANCH}.${CLOUDFLARE_PROJECT}.pages.dev/"
           else
             URL="https://${CLOUDFLARE_PROJECT}.pages.dev/"
