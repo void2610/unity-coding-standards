@@ -144,10 +144,14 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            const marker = '<!-- unity-editmode-test-results -->';
             const resultsPath = process.env.TEST_RESULTS_PATH;
             const testMode = process.env.TEST_MODE || 'EditMode';
             const issue_number = Number(process.env.PR_NUMBER);
+
+            // EditMode / PlayMode で別コメントを保持する。以前は marker が hardcode で
+            // 'unity-editmode-test-results' 固定だったため後発の job が先発の comment を
+            // 上書きしてしまい、PR 上には片方の結果しか残らなかった。
+            const marker = `<!-- unity-${testMode.toLowerCase()}-test-results -->`;
 
             let summary = 'テスト結果ファイルが見つかりませんでした。';
             let detailsSection = '';
