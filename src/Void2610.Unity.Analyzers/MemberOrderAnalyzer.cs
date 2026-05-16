@@ -153,32 +153,39 @@ namespace Void2610.Unity.Analyzers
             if (categorizedMembers.Count <= 1)
                 return;
 
-            // 順序チェック: カテゴリインデックスが単調非減少であること
-            var maxCategory = categorizedMembers[0].Category;
-            var maxCategoryName = CategoryNames[maxCategory];
-
-            for (var i = 1; i < categorizedMembers.Count; i++)
+            // #if などのディレクティブを含むメンバーが 1 つでもある型は順序チェックをスキップする。
+            // CodeFix 側でも並び替えをスキップするため、警告だけ出すとユーザーが手動で動かす
+            // 必要が生じるだけで、ディレクティブ境界を壊すリスクが残る。
+            // 空行ルール (VUA3003) は影響しないため引き続き評価する。
+            if (!members.Any(m => m.ContainsDirectives))
             {
-                var current = categorizedMembers[i];
+                // 順序チェック: カテゴリインデックスが単調非減少であること
+                var maxCategory = categorizedMembers[0].Category;
+                var maxCategoryName = CategoryNames[maxCategory];
 
-                if (current.Category < maxCategory)
+                for (var i = 1; i < categorizedMembers.Count; i++)
                 {
-                    // 順序違反を報告
-                    var location = current.Member is FieldDeclarationSyntax fieldDecl
-                        ? fieldDecl.Declaration.Variables.First().Identifier.GetLocation()
-                        : GetMemberIdentifierLocation(current.Member);
+                    var current = categorizedMembers[i];
 
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        VUA3002,
-                        location,
-                        current.Name,
-                        CategoryNames[current.Category],
-                        maxCategoryName));
-                }
-                else if (current.Category > maxCategory)
-                {
-                    maxCategory = current.Category;
-                    maxCategoryName = CategoryNames[maxCategory];
+                    if (current.Category < maxCategory)
+                    {
+                        // 順序違反を報告
+                        var location = current.Member is FieldDeclarationSyntax fieldDecl
+                            ? fieldDecl.Declaration.Variables.First().Identifier.GetLocation()
+                            : GetMemberIdentifierLocation(current.Member);
+
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            VUA3002,
+                            location,
+                            current.Name,
+                            CategoryNames[current.Category],
+                            maxCategoryName));
+                    }
+                    else if (current.Category > maxCategory)
+                    {
+                        maxCategory = current.Category;
+                        maxCategoryName = CategoryNames[maxCategory];
+                    }
                 }
             }
 

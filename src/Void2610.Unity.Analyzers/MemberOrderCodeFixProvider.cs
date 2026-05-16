@@ -46,6 +46,17 @@ namespace Void2610.Unity.Analyzers
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
             var members = NormalizeDirectiveWrappedMembers(typeDeclaration.Members);
 
+            // #if / #region などのディレクティブを含むメンバーがある型は並び替えをスキップする。
+            // Excluded メンバーを OriginalIndex で再挿入するロジックは sorted のサイズが元と
+            // 異なるため、ディレクティブ境界の内側に他カテゴリのメンバーが紛れ込みうる
+            // (例: #if UNITY_EDITOR の内側に並び替えで Update() が押し込まれる)。
+            // ディレクティブが絡む並び替えは正しく扱うのが難しいため、安全側に振って空行
+            // 正規化だけ行う。
+            if (members.Any(m => m.ContainsDirectives))
+            {
+                return await NormalizeMemberSpacingAsync(document, typeDeclaration, cancellationToken).ConfigureAwait(false);
+            }
+
             // 各メンバーをカテゴリで分類
             var categorized = new List<(MemberDeclarationSyntax Member, MemberOrderAnalyzer.MemberCategory Category, int OriginalIndex)>();
             var excluded = new List<(MemberDeclarationSyntax Member, int OriginalIndex)>();
