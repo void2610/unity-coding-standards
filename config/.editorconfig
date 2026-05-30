@@ -200,6 +200,11 @@ dotnet_diagnostic.VUA3003.severity = warning
 dotnet_diagnostic.VUA3004.severity = warning
 dotnet_diagnostic.VUA4001.severity = warning
 
+# Rider/ReSharper: 「名前空間がファイルの場所に対応していません」インスペクションを無効化。
+# Unity の asmdef レイアウトでは Rider が project ルート + フォルダパスから期待名前空間を推測するため、
+# 実際の名前空間 (asmdef rootNamespace 基準) と二重化した誤検出 (例: ...PropertyInspection.Gameplay.PropertyInspection) が出る。
+resharper_check_namespace_highlighting = none
+
 # XML, JSON
 [*.{xml,json,yml,yaml}]
 indent_size = 2
