@@ -8,7 +8,7 @@ Unity プロジェクト向けの共有コーディング規約リポジトリ�
 | ID | カテゴリ | 重大度 | 説明 |
 |---|---|---|---|
 | VUA1001 | Design | Warning | `[SerializeField]` フィールドに対する防御的 null チェックを禁止 |
-| VUA1002 | Design | Warning | C# 標準イベント/デリゲート禁止（R3 の `Subject<T>` を使用） |
+| VUA1002 | Design | Warning | C# 標準イベント/デリゲート禁止（R3 の `Subject<T>` を使用。報告のみ・自動修正なし＝呼び出し側を含む手動置換が必要） |
 | VUA1003 | Design | Warning | `if(IsActive()) Cancel()` ではなく `TryCancel()` を使用 |
 | VUA1004 | Design | Warning | `StartCoroutine` の使用を禁止（UniTask などの代替を使用） |
 | VUA2001 | Naming | Warning | `[SerializeField]` フィールドに `_` プレフィックスを付けない |
