@@ -8,7 +8,9 @@ namespace Void2610.Unity.Analyzers
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class EventSystemAnalyzer : DiagnosticAnalyzer
     {
-        // C#標準のeventやAction/Funcフィールドの代わりにR3のSubjectを使用するよう警告
+        // C#標準のeventやActionフィールドの代わりにR3のSubjectを使用するよう警告する (報告のみ)。
+        // event/Action → Subject の変換は呼び出し側 (Invoke/+=/代入) の書き換えを伴う意味的リファクタで、
+        // 宣言だけを機械的に置換するとコンパイル不能になるため自動修正 (CodeFix) は提供しない。手動で置換する。
         public static readonly DiagnosticDescriptor VUA1002 = new DiagnosticDescriptor(
             "VUA1002",
             "イベントにはR3のSubjectを使用してください",
