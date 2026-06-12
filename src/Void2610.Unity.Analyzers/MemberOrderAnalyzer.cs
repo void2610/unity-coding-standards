@@ -192,12 +192,15 @@ namespace Void2610.Unity.Analyzers
             // 空行ルールチェック（定数/通常フィールドカテゴリのみ）:
             // 1. Constant <-> PrivateField の境界は空行1行
             // 2. 同一カテゴリ内の連続空行2行以上は禁止
-            AnalyzeMemberSpacing(context, categorizedMembers);
+            // Excluded メンバー (private プロパティ等) を挟むペアは対象外。
+            // 除外メンバーの実体行を空行として誤カウントし、空白では解消不能な
+            // (= CodeFix も修正できない) 違反を報告してしまうため、CodeFix と同じ構文上の隣接ペアのみ見る
+            AnalyzeMemberSpacing(context, members);
         }
 
         private static void AnalyzeMemberSpacing(
             SyntaxNodeAnalysisContext context,
-            List<(MemberDeclarationSyntax Member, MemberCategory Category, string Name)> members)
+            SyntaxList<MemberDeclarationSyntax> members)
         {
             if (members.Count <= 1)
             {
@@ -212,18 +215,18 @@ namespace Void2610.Unity.Analyzers
                 var previous = members[i - 1];
                 var current = members[i];
 
-                var previousEndLine = syntaxTree.GetLineSpan(previous.Member.Span).EndLinePosition.Line;
-                var currentStartLine = GetMemberAnchorLine(syntaxTree, sourceText, current.Member);
-                var blankLines = currentStartLine - previousEndLine - 1;
-
-                var previousIsFieldGroup = IsFieldGroupCategory(previous.Category);
-                var currentIsFieldGroup = IsFieldGroupCategory(current.Category);
-                if (!previousIsFieldGroup || !currentIsFieldGroup)
+                var previousCategory = ClassifyMember(previous);
+                var currentCategory = ClassifyMember(current);
+                if (!IsFieldGroupCategory(previousCategory) || !IsFieldGroupCategory(currentCategory))
                 {
                     continue;
                 }
 
-                var requiresSingleBlankLine = previous.Category != current.Category;
+                var previousEndLine = syntaxTree.GetLineSpan(previous.Span).EndLinePosition.Line;
+                var currentStartLine = GetMemberAnchorLine(syntaxTree, sourceText, current);
+                var blankLines = currentStartLine - previousEndLine - 1;
+
+                var requiresSingleBlankLine = previousCategory != currentCategory;
 
                 var hasViolation =
                     (requiresSingleBlankLine && blankLines != 1) ||
@@ -234,16 +237,16 @@ namespace Void2610.Unity.Analyzers
                     continue;
                 }
 
-                var location = current.Member switch
+                var location = current switch
                 {
                     FieldDeclarationSyntax field => field.Declaration.Variables.First().Identifier.GetLocation(),
-                    _ => GetMemberIdentifierLocation(current.Member)
+                    _ => GetMemberIdentifierLocation(current)
                 };
 
                 context.ReportDiagnostic(Diagnostic.Create(
                     VUA3003,
                     location,
-                    current.Name));
+                    GetMemberName(current)));
             }
         }
 

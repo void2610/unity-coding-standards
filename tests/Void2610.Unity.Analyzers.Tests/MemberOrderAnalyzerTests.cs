@@ -629,5 +629,36 @@ public class TestClass
                 .WithArguments("_count");
             await Verify.VerifyAnalyzerAsync(test, expected);
         }
+
+        [Fact]
+        public async Task PrivatePropertyBetweenPrivateFields_NoDiagnostic()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count = 0;
+
+    private int Doubled => _count * 2;
+    private int Tripled => _count * 3;
+
+    private bool _flag;
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task CommentedFieldAfterPrivateProperty_NoDiagnostic()
+        {
+            var test = @"
+public class TestClass
+{
+    private int _count;
+    private int Doubled => _count * 2;
+
+    // キャッシュフラグ
+    private bool _flag;
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
     }
 }
