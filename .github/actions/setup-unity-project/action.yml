@@ -38,6 +38,20 @@ runs:
         # git 管理外ファイルをビルドキャッシュとして保持するため clean を無効にする。
         clean: false
 
+    - name: Repair LFS files
+      shell: bash
+      run: |
+        # clean:false で使い回すワークスペースでは、過去に smudge へ失敗した LFS ファイルが
+        # ポインタのまま index 上 clean 扱いとなり、以降の checkout --force でも復元されない。
+        # ポインタを必ず実体化し、残骸があれば Unity の難解なアセット読込エラーより先にここで落とす。
+        git lfs pull
+        REMAINING=$(git lfs ls-files | awk '$2 == "-"' | wc -l | tr -d ' ')
+        if [ "$REMAINING" -gt 0 ]; then
+          echo "::error::ポインタのまま実体化されていない LFS ファイルが ${REMAINING} 件あります:"
+          git lfs ls-files | awk '$2 == "-"'
+          exit 1
+        fi
+
     - name: Remove stale Unity lockfile
       shell: bash
       run: |
