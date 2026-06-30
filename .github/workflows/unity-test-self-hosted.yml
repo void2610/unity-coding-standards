@@ -134,6 +134,9 @@ jobs:
 
       - name: Comment test results on PR
         if: ${{ always() && inputs.pr-number > 0 }}
+        # 結果コメント投稿は非必須のレポート。GitHub API の一時的失敗 (401 等) で
+        # テスト本体の成否と無関係にジョブを赤くしないよう、ステップ単位で失敗を許容する。
+        continue-on-error: true
         uses: actions/github-script@v7
         env:
           TEST_RESULTS_PATH: ${{ env.TEST_RESULTS_PATH }}
