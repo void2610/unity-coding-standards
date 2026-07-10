@@ -10,9 +10,14 @@ description: Unity Editor を外から操作する `uloop-*` skill 群をいつ�
 
 Unity Editor を外から叩くための `uloop-*` skill 群。**開発ワークフロー内のエディタ操作・単発の確認作業** に使う。ランタイムの動作確認やテストには使わない（→ `liminal-palette-guide` skill）。
 
+## 基本方針
+
+- **Unity 側の操作は uloop / LiminalPalette skill を第一選択とする**。ユーザーに手動操作（Editor でのクリック・Inspector 手配線・メニュー実行など）を依頼する前に、**まず skill で完結できないか必ず検討する**。
+- 「Unity を開いて〜してください」と頼む前に、その操作を叩ける uloop skill（または該当 `[LiminalCommand]`）が無いかを先に確認する。
+
 ## 積極的に使うユースケース
 
-- **コード編集後の検証**: `uloop-compile` → `uloop-get-logs` でエラー / 警告を即確認。エラーが出たまま「完了」と報告しない。
+- **コード編集後の検証**: `uloop-compile` (ForceRecompile=true) → `uloop-get-logs` (LogType=Error) でエラー / 警告を即確認。エラーが出たまま「完了」と報告しない。
 - **テスト実行**: `uloop-run-tests` で EditMode / PlayMode テストを走らせ、失敗時は NUnit XML から原因を読む。
 - **シーン構造の把握**: 新規アセットを触る前に `uloop-get-hierarchy` / `uloop-find-game-objects` で既存構造を確認。GameObject 名やパスを推測で書かない。
 - **参照ワイヤリング・SerializeField 設定**: Inspector の手作業を頼まずに `uloop-execute-dynamic-code` で `SerializedObject` 経由で設定する。Prefab 生成・コンポーネント追加・マテリアル割り当てもここで完結させる。
