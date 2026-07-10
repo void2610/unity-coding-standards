@@ -99,6 +99,7 @@ CI では次のように検証モードで実行できます。
 | `unity-standards:unity-coding-standards` | VUA ルール（アナライザー）に沿った Unity C# コーディング規約 |
 | `unity-standards:liminal-palette-guide` | LiminalPalette（`liminal-*`）の運用方針。ランタイム検証をシナリオ資産化する運用ルール |
 | `unity-standards:uloop-guide` | Unity Editor 操作（`uloop-*`）の運用方針 |
+| `unity-standards:prefab-view` | Unity の UI View を Prefab + SerializeField で構築する標準手順 |
 
 skill の実体は [`plugins/unity-standards/skills/`](plugins/unity-standards/skills/) にあります。
 
