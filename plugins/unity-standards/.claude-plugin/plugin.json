@@ -1,12 +1,12 @@
 {
   "name": "unity-standards",
-  "description": "Unity 共通 Claude Code skills: コーディング規約と LiminalPalette / uloop の運用ガイド",
-  "version": "0.1.0",
+  "description": "Unity 共通 Claude Code skills: コーディング規約、LiminalPalette / uloop の運用ガイド、UI View の Prefab 構築手順",
+  "version": "0.2.0",
   "author": {
     "name": "void2610"
   },
   "homepage": "https://github.com/void2610/unity-coding-standards",
   "repository": "https://github.com/void2610/unity-coding-standards",
   "license": "MIT",
-  "keywords": ["unity", "coding-standards", "roslyn-analyzer", "liminal-palette", "uloop"]
+  "keywords": ["unity", "coding-standards", "roslyn-analyzer", "liminal-palette", "uloop", "prefab", "ui-view"]
 }
