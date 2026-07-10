@@ -73,6 +73,38 @@ CI では次のように検証モードで実行できます。
 - `.github/actions/`: 上記 workflow 内で使う composite action 群（Unity セットアップ / WebGL ビルド / Discord 通知 / sops 復号）。詳細は [`.github/actions/README.md`](.github/actions/README.md)
 - `scripts/init-unity-project.sh`: 新規 Unity プロジェクト向け初期化スクリプト
 - `scripts/run-format.sh`: analyzers / whitespace / style をまとめて実行するスクリプト（CI 用の `--verify-no-changes` 対応）
+- `.claude-plugin/marketplace.json`: このリポを Claude Code プラグイン・マーケットプレイスとして宣言（[Claude Code プラグイン](#claude-code-プラグイン-unity-共通-skill)参照）
+- `plugins/unity-standards/`: Unity 共通 Claude Code skill を配布するプラグイン本体
+- `docs/`: skill 運用ガイドの索引（本体は `plugins/unity-standards/skills/` の各 `SKILL.md`）
+
+## Claude Code プラグイン: Unity 共通 skill
+
+このリポジトリは Claude Code の **プラグイン・マーケットプレイス** も兼ねています。Unity 共通の Claude Code skill（コーディング規約 / LiminalPalette 運用ガイド / uloop 運用ガイド）を、各プロジェクトへ個別配置せずプロジェクト横断で使い回せます。
+
+### 導入手順
+
+利用側の各プロジェクトで一度だけ実行します（Claude Code 上のスラッシュコマンド）:
+
+```
+/plugin marketplace add void2610/unity-coding-standards
+/plugin install unity-standards@void2610-unity
+```
+
+インストールスコープは user（全プロジェクト）/ project / local から選択できます。skill を更新したいときはこのリポジトリを直すだけで、`/plugin marketplace update` 後に全プロジェクトへ反映されます。
+
+### 含まれる skill
+
+| skill | 内容 |
+|---|---|
+| `unity-standards:unity-coding-standards` | VUA ルール（アナライザー）に沿った Unity C# コーディング規約 |
+| `unity-standards:liminal-palette-guide` | LiminalPalette（`liminal-*`）の運用方針。ランタイム検証をシナリオ資産化する運用ルール |
+| `unity-standards:uloop-guide` | Unity Editor 操作（`uloop-*`）の運用方針 |
+
+skill の実体は [`plugins/unity-standards/skills/`](plugins/unity-standards/skills/) にあります。
+
+> **注意 / 補足**
+> - `liminal-*` / `uloop-*` **skill そのもの**（`liminal-execute` 等）は `liminal-palette` パッケージ側に同梱・配布されるもので、このプラグインには **含めません**。このプラグインが配布するのは「それらをいつ・どう使うか」の運用ガイド skill です。パッケージ同梱 skill との二重配布・上書き衝突を避けるための切り分けです。
+> - Claude Code on the web（使い捨てコンテナ）には個人設定・プラグインが自動同期されない可能性があります。web でも確実に効かせたいプロジェクトは、リポジトリの `.claude/skills/` にコミットする方式との併用も検討してください。
 
 ## ルールの抑制
 

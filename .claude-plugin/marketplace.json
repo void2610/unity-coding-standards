@@ -1,0 +1,16 @@
+{
+  "name": "void2610-unity",
+  "owner": {
+    "name": "void2610"
+  },
+  "metadata": {
+    "description": "Unity 共通 Claude Code skills / coding standards の marketplace"
+  },
+  "plugins": [
+    {
+      "name": "unity-standards",
+      "source": "./plugins/unity-standards",
+      "description": "Unity 共通 Claude Code skills（コーディング規約 / LiminalPalette 運用ガイド / uloop 運用ガイド）"
+    }
+  ]
+}
