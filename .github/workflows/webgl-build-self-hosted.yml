@@ -65,7 +65,7 @@ on:
         type: boolean
         default: true
       webgl-code-optimization:
-        description: "WebGL の Code Optimization（BuildTimes で wasm 最適化を弱めてビルド短縮。PR プレビュー用途。空ならプロジェクト設定のまま）"
+        description: "WebGL の Code Optimization（BuildTimes / RuntimeSpeed / DiskSize。BuildTimes は wasm 最適化を弱めるビルド短縮向けで PR プレビュー用途。空ならプロジェクト設定のまま）"
         required: false
         type: string
         default: ""

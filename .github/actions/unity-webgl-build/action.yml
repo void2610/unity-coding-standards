@@ -27,8 +27,16 @@ runs:
         UNITY_PATH: ${{ inputs.unity-path }}
         UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
         EXECUTE_METHOD: ${{ inputs.execute-method }}
-        UNITY_WEBGL_CODE_OPTIMIZATION: ${{ inputs.code-optimization }}
+        CODE_OPTIMIZATION: ${{ inputs.code-optimization }}
       run: |
+        # 「空なら未設定」の契約を守るため、非空のときだけ環境変数を定義する。
+        if [ -n "$CODE_OPTIMIZATION" ]; then
+          case "$CODE_OPTIMIZATION" in
+            BuildTimes|RuntimeSpeed|DiskSize) export UNITY_WEBGL_CODE_OPTIMIZATION="$CODE_OPTIMIZATION" ;;
+            *) echo "::error::code-optimization が無効です: '$CODE_OPTIMIZATION' (許容値: BuildTimes / RuntimeSpeed / DiskSize)"; exit 1 ;;
+          esac
+        fi
+
         LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
         # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
         rm -f Temp/UnityLockfile
