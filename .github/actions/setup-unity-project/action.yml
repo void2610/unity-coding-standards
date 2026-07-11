@@ -195,3 +195,22 @@ runs:
 
         # 復元が実際に成功した場合のみハッシュを保存し、次回以降のスキップを許可する。
         echo "$CURRENT_HASH" > "$HASH_FILE"
+
+    - name: Warm-up Unity on cold Library
+      shell: bash
+      env:
+        UNITY_PATH: ${{ steps.verify.outputs.unity-path }}
+        BUILD_TARGET: ${{ inputs.build-target }}
+      run: |
+        # Library 消失時も .nuget-restore-hash が残ると復元側 warm-up がスキップされ、cold ビルドが source generator のラベル解決レースを踏むため。
+        if [ -f "$GITHUB_WORKSPACE/Library/ArtifactDB" ]; then
+          echo "Library は warm — warm-up をスキップします。"
+          exit 0
+        fi
+        echo "::group::Warm-up Unity (cold Library)"
+        WARMUP_ARGS=(-batchmode -quit -nographics -projectPath "$GITHUB_WORKSPACE" -logFile -)
+        if [ -n "$BUILD_TARGET" ]; then
+          WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
+        fi
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" || echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
+        echo "::endgroup::"
