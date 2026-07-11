@@ -85,9 +85,12 @@ jobs:
           unity-version: ${{ inputs.unity-version }}
           nuget-restore-method: ${{ inputs.nuget-restore-method }}
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
+          # コールドキャッシュ時、warm-up と本ビルドで異なる buildTarget の import が二重に走るのを防ぐ。
+          build-target: WebGL
 
       - name: Build WebGL
-        timeout-minutes: 45
+        # Library キャッシュ喪失時のフル import + IL2CPP/wasm ビルドは 45 分に迫る (実測 37〜46 分)。
+        timeout-minutes: 90
         uses: void2610/unity-coding-standards/.github/actions/unity-webgl-build@main
         with:
           unity-path: ${{ steps.setup.outputs.unity-path }}
