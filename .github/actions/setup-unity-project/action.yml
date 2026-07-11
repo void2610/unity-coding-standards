@@ -19,6 +19,10 @@ inputs:
     description: "packages.config のパス（ハッシュ比較で復元スキップ判定に使用）"
     required: false
     default: Assets/packages.config
+  build-target:
+    description: "warm-up Unity 起動に渡す -buildTarget（本ビルドと揃えて二重 import を防ぐ。空なら未指定）"
+    required: false
+    default: ""
 
 outputs:
   unity-path:
@@ -88,6 +92,7 @@ runs:
       shell: bash
       env:
         UNITY_PATH: ${{ steps.verify.outputs.unity-path }}
+        BUILD_TARGET: ${{ inputs.build-target }}
       run: |
         # packages.config の hash と、Assets/Packages/ 配下の実体パッケージの両方を見て
         # 復元が必要か判定する。hash だけで判定すると、過去に復元失敗状態のまま hash が
@@ -168,12 +173,12 @@ runs:
         # ソースジェネレートされず "MapTo does not exist" になる)。
         # warm-up 用にここで一度起動して、import と初回 compile を済ませる。
         echo "::group::Warm-up Unity (asset import + first compile)"
-        "$UNITY_PATH" \
-          -batchmode \
-          -quit \
-          -nographics \
-          -projectPath "$GITHUB_WORKSPACE" \
-          -logFile - || {
+        WARMUP_ARGS=(-batchmode -quit -nographics -projectPath "$GITHUB_WORKSPACE" -logFile -)
+        if [ -n "$BUILD_TARGET" ]; then
+          # 本ビルドと buildTarget を揃え、プラットフォーム切り替えによる二重 import を防ぐ。
+          WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
+        fi
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" || {
             echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
           }
         echo "::endgroup::"
