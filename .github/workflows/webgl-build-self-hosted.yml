@@ -64,6 +64,11 @@ on:
         required: false
         type: boolean
         default: true
+      webgl-code-optimization:
+        description: "WebGL の Code Optimization（BuildTimes / RuntimeSpeed / DiskSize。BuildTimes は wasm 最適化を弱めるビルド短縮向けで PR プレビュー用途。空ならプロジェクト設定のまま）"
+        required: false
+        type: string
+        default: ""
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -96,6 +101,7 @@ jobs:
           unity-path: ${{ steps.setup.outputs.unity-path }}
           execute-method: ${{ inputs.execute-method }}
           build-output-path: ${{ inputs.build-output-path }}
+          code-optimization: ${{ inputs.webgl-code-optimization }}
 
       - name: Decrypt secrets
         id: secrets
