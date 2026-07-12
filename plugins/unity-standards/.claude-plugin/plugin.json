@@ -1,7 +1,7 @@
 {
   "name": "unity-standards",
-  "description": "Unity 共通 Claude Code skills: コーディング規約、LiminalPalette / uloop の運用ガイド、UI View の Prefab 構築手順",
-  "version": "0.3.0",
+  "description": "Unity 共通 Claude Code skills: コーディング規約、LiminalPalette / uloop の運用ガイド、UI View の Prefab 構築手順、submodule 運用方針",
+  "version": "0.4.0",
   "author": {
     "name": "void2610"
   },
