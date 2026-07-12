@@ -11,7 +11,8 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 
 - **View 実装 = Prefab を組む作業 + そこへ振る舞いを与える薄い MonoBehaviour**。UI の見た目・階層は Prefab に、View スクリプトは `[SerializeField]` 参照と表示ロジックだけを持つ。
 - View だけが MonoBehaviour。Presenter / Model はピュア C# (DI設計原則)。
-- コードで手続き的に UI GameObject を新規生成しない。Prefab に置いた既存オブジェクトを操作 (SetActive / 色・文字の差し替え / LitMotion で animate) するのは可。
+- コードで手続き的に UI GameObject を新規生成しない。Prefab に置いた既存オブジェクトを操作 (色・文字の差し替え / CanvasGroup の表示切替 / LitMotion で animate) するのは可。
+- **`Assets/Scripts/Utils/Core/Extensions/LitMotionExtensions.cs` に既存のアニメーション拡張メソッド群がある。View のアニメーション・表示演出はこのファイルを起点に考える** (フェード・スライド等、`CanvasGroup` / `Image` / `TextMeshProUGUI` / `SpriteRenderer` / `RectTransform` 等の拡張が揃っている)。新しい演出が要る場面では **まずこのファイルを grep してから** `LMotion.Create(...)` を書き始める (詳細は下「鉄則: 表示/非表示は CanvasGroup、アニメーションは LitMotion + Utils 拡張メソッド」)。
 
 ## 中核の設計判断: 固定要素 と 反復要素 を分ける
 
@@ -39,6 +40,16 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 
 `new GameObject(...) + AddComponent<Button>()` や TMP を手で組み立てるのは、この探索をサボった兆候。まず既存 Prefab を探す。
 
+## 鉄則: 表示/非表示は CanvasGroup、アニメーションは LitMotionExtensions.cs を起点にする
+
+- アニメーションは **LitMotion (`LMotion`) を使う**。`Coroutine` + 手書き lerp や `Update` でのフレーム毎手動補間は書かない。
+- **`LMotion.Create(...)` を直接組み立てる前に、必ず `Assets/Scripts/Utils/Core/Extensions/LitMotionExtensions.cs` を grep して既存の拡張メソッドを探す** (車輪の再発明禁止 → [[check-utils-before-implementing]])。フェード: `CanvasGroup.FadeIn(duration)` / `FadeOut(duration)` / `FadeTo(duration, alpha)`、`Image.FadeIn` / `FadeOut`、`TextMeshProUGUI.FadeIn` / `FadeOut` など。完了時に `interactable` / `blocksRaycasts` を追従させる後処理も内包済みなので、手動で `LMotion.Create(...).BindToAlpha(...)` を書く前に必ず確認する。
+    - 該当する拡張が無い場合のみ `LMotion.Create(...)` を直接組み立てる。その際も、他 View で同じ動きが今後も要りそうなら `LitMotionExtensions.cs` に拡張メソッドとして足すことを検討する (一点物として View 内に埋め込まない)。
+- View やその子要素の表示/非表示は **`GameObject.SetActive` ではなく `CanvasGroup` を積極的に使う** (`alpha` / `interactable` / `blocksRaycasts`)。フェード演出が後から必要になっても構造を変えずに済み、`SetActive(false)` で失われる「非表示中もコルーチン/Tween/RectTransform 計算を継続させたい」ケースにも対応できる。
+    - 即時切り替えでよい箇所は `Void2610.UnityTemplate.CanvasGroupExtensions` の `Show()` / `Hide()` を使う (`alpha`/`interactable`/`blocksRaycasts` を一括設定、手で3行書かない)。
+    - フェードが要る箇所は上記 `LitMotionExtensions.cs` の `CanvasGroup.FadeIn()` / `FadeOut()` を使う。
+    - `SetActive` を使ってよいのは、非表示中に一切の処理 (Tween 状態・RectTransform 計算・子オブジェクトの Update) を継続させる必要がない、純粋な ON/OFF のみ (例: ページめくりで前面画像を丸ごと隠す等)。表示状態の一部としてフェード演出が絡む対象は CanvasGroup にする。
+
 ## 鉄則: Canvas を新規に作らない
 
 **シーンの Canvas は原則 1 つ**。View / オーバーレイ / ダイアログの Prefab に `Canvas` (+ `CanvasScaler` / `GraphicRaycaster`) を持たせない。UI ルートは素の `RectTransform` (全画面なら anchor 0..1 ストレッチ) にし、**シーンの既存 Canvas 配下に配置する** (`InstantiatePrefab(prefab, canvas.transform)`)。既存 View も Canvas を持たず単一 Canvas 配下にぶら下がる形にする。
@@ -59,6 +70,7 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 ### 2. View スクリプトを書く
 
 - 固定要素は `[SerializeField]` フィールド、反復要素は `[SerializeField] GameObject xxxPrefab`。
+- 表示/非表示の切り替えが要る固定要素は `[SerializeField] CanvasGroup` で持つ (`GameObject` で持って `SetActive` するのではなく)。表示演出は `CanvasGroupExtensions.Show()/Hide()` かフェードが要れば `LitMotionExtensions` の `FadeIn()/FadeOut()` を使う (上「鉄則: 表示/非表示は CanvasGroup」)。
 - 反復生成は `Instantiate(xxxPrefab, parent)` → 中の Image/TMP/Button を `GetComponent` / `GetComponentInChildren` で取り出して値を差し込む。独立 Prefab はアクティブなルートで保存するので複製後の `SetActive(true)` は不要。
 - **`[SerializeField]` に手動 null チェックを書かない** (アナライザ `VUA1001`。設定ミスは即クラッシュさせる方針)。`FindFirstObjectByType` で得た View も同様。
 - **フォントをコードで配線しない** (`FindFirstObjectByType<TMP_Text>().font` や `xxx.font = template.font` は書かない)。フォントは Prefab の TMP にエディタ設定する。
@@ -76,6 +88,7 @@ UI 階層の組み立ては `uloop execute-dynamic-code` (Editor操作skill) で
 - `PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset` / `UnloadPrefabContents` で開閉。
 - dynamic code 内で `Object` は曖昧参照になるため `UnityEngine.Object.DestroyImmediate` と明示する。
 - **落とし穴**: `FindProperty` はコンパイル済みアセンブリのフィールドを引く。C# のフィールドを追加・改名したら **先に `uloop-compile` してから**配線 dynamic code を流す (未コンパイルだと `FindProperty` が null → NRE)。
+- 表示演出が要る固定要素は `CanvasGroup` コンポーネントを付けて配線する (Image 単体に頼らない)。アニメーションの実装自体はスクリプト側で `LitMotionExtensions.cs` の既存拡張を使う (上「鉄則」)。
 
 ### 4. 検証
 
