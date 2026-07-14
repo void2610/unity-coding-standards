@@ -48,11 +48,14 @@ runs:
         # clean:false 再利用ワークスペースでは smudge 失敗ポインタが index clean 扱いとなり pull の checkout も skip する
         git lfs pull
 
-        # 残ポインタ ($2=="-") は削除して missing 化し再取得で強制実体化する (awk はスペース入りパスに備え末尾まで取る)
-        STUCK=$(git lfs ls-files | awk '{s=$2; $1=""; $2=""; sub(/^ +/, ""); if (s == "-") print}')
-        if [ -n "$STUCK" ]; then
+        # 残ポインタは破損/部分キャッシュを pull が「取得済み」と誤認して skip するのが原因: 該当 OID のキャッシュ実体を消して再取得を強制する
+        STUCK_OIDS=$(git lfs ls-files -l | awk '$2 == "-" {print $1}')
+        if [ -n "$STUCK_OIDS" ]; then
           echo "::group::残ポインタを強制実体化"
-          printf '%s\n' "$STUCK" | while IFS= read -r f; do
+          printf '%s\n' "$STUCK_OIDS" | while IFS= read -r oid; do
+            [ -n "$oid" ] && rm -f ".git/lfs/objects/${oid:0:2}/${oid:2:2}/${oid}"
+          done
+          git lfs ls-files | awk '{s=$2; $1=""; $2=""; sub(/^ +/, ""); if (s == "-") print}' | while IFS= read -r f; do
             [ -n "$f" ] && rm -f "$f"
           done
           git lfs pull
