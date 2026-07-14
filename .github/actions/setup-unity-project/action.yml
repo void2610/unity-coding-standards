@@ -45,10 +45,20 @@ runs:
     - name: Repair LFS files
       shell: bash
       run: |
-        # clean:false で使い回すワークスペースでは、過去に smudge へ失敗した LFS ファイルが
-        # ポインタのまま index 上 clean 扱いとなり、以降の checkout --force でも復元されない。
-        # ポインタを必ず実体化し、残骸があれば Unity の難解なアセット読込エラーより先にここで落とす。
+        # clean:false 再利用ワークスペースでは smudge 失敗ポインタが index clean 扱いとなり pull の checkout も skip する
         git lfs pull
+
+        # 残ポインタ ($2=="-") は削除して missing 化し再取得で強制実体化する (awk はスペース入りパスに備え末尾まで取る)
+        STUCK=$(git lfs ls-files | awk '{s=$2; $1=""; $2=""; sub(/^ +/, ""); if (s == "-") print}')
+        if [ -n "$STUCK" ]; then
+          echo "::group::残ポインタを強制実体化"
+          printf '%s\n' "$STUCK" | while IFS= read -r f; do
+            [ -n "$f" ] && rm -f "$f"
+          done
+          git lfs pull
+          echo "::endgroup::"
+        fi
+
         REMAINING=$(git lfs ls-files | awk '$2 == "-"' | wc -l | tr -d ' ')
         if [ "$REMAINING" -gt 0 ]; then
           echo "::error::ポインタのまま実体化されていない LFS ファイルが ${REMAINING} 件あります:"
