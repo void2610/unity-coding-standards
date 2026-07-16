@@ -23,11 +23,6 @@ on:
         required: false
         type: string
         default: test-results
-      extra-artifact-path:
-        description: "テスト後に追加回収するパス (例: 失敗診断の出力)。空でスキップ"
-        required: false
-        type: string
-        default: ""
       pr-number:
         required: false
         type: number
@@ -86,11 +81,6 @@ jobs:
           nuget-restore-method: ${{ inputs.nuget-restore-method }}
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
 
-      # self-hosted は workspace が残るため、前回 run の診断が今回の artifact に混ざらないよう先に消す
-      - name: Clean extra diagnostics path
-        if: ${{ inputs.extra-artifact-path != '' }}
-        run: rm -rf "${{ inputs.extra-artifact-path }}"
-
       - name: Run Unity tests
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
@@ -134,14 +124,6 @@ jobs:
             echo "::error::Unity exited with unexpected code $EXIT_CODE"
             exit "$EXIT_CODE"
           fi
-
-      - name: Upload extra diagnostics
-        uses: actions/upload-artifact@v4
-        if: ${{ always() && inputs.extra-artifact-path != '' }}
-        with:
-          name: ${{ inputs.artifact-name }}-diagnostics
-          path: ${{ inputs.extra-artifact-path }}
-          if-no-files-found: ignore
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
