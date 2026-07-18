@@ -60,12 +60,13 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 
 ## 鉄則: UI 要素を決め打ちでインスタンス化しない (描画順は Hierarchy 順で決まる)
 
-Canvas 配下の描画順は **sibling (Hierarchy 内の並び順) で決まる**。`Object.Instantiate(prefab, parent)` をコードから呼ぶ箇所は、その瞬間の呼び出し順・登録順がそのまま sibling 順 = 描画順になる。呼び出し順を「たまたま今の登録順で正しく見えている」状態のまま放置すると、登録順が変わった瞬間 (別の Instantiate 呼び出しを追加/並べ替えた、DI 登録順を変えた等) に意図しない前後関係で描画され、後から気づきにくい表示崩れになる。
+Canvas 配下の描画順は **sibling (Hierarchy 内の並び順) で決まる**。`LifetimeScope.Configure` 等のコードから `Object.Instantiate(prefab, parent)` を呼んで複数 View を実行時生成すると、その瞬間の呼び出し順がそのまま sibling 順 = 描画順になる。呼び出し順を後から並べ替えたり登録を1つ追加しただけで描画の前後関係が変わり、後から気づきにくい表示崩れを生む。
 
-- 複数の View を実行時に Instantiate する場合、**描画順を仕様として明示する** (どれが最前面か、重なってよいのか)。祈るように登録順に任せない。
-- 前後関係を保証したい要素は `transform.SetSiblingIndex(...)` / `SetAsLastSibling()` / `SetAsFirstSibling()` で明示的に確定させる。「たまたまこの順で Instantiate したから正しい」を前提にしない。
-- 専用の親コンテナ (例: `PuzzlePartRoot`) を用意すること自体は良いが、それだけで描画順問題は解決しない。同じ親の中でも sibling 順は依然として明示管理が要る。
-- 借用中の他 View の `transform.parent` を Instantiate 先に使い回すのも避ける (借用元を削除・移動すると巻き添えで壊れる上、sibling 順の意図も見えなくなる)。
+**第一候補は「実行時 Instantiate をやめて Prefab を Scene に事前配置する」こと** (`transform.SetSiblingIndex(...)` 等でコードから帳尻合わせするのは、事前配置で足りるはずの問題をコードで解決しようとしている code smell)。
+
+- 描画順が意味を持つ複数の View / Part は、Prefab インスタンスとして **Scene の Hierarchy に編集時から並べておく** (`PrefabUtility.InstantiatePrefab` で配置し、Prefab リンクを保ったまま並び順を Hierarchy 上で確定させる)。
+- `LifetimeScope` 側は `Object.Instantiate(...)` ではなく、他の共有 View (`BackgroundView` / `AudioChannelView` / `CenterImageView` 等) と同じ **`Object.FindFirstObjectByType<T>(FindObjectsInactive.Include)` で解決する**のが本プロジェクトの規約。Instantiate 由来の複数 View は例外ではなく、この規約に合わせる。
+- 借用中の他 View の `transform.parent` を配置先に使い回すのも避ける (借用元を削除・移動すると巻き添えで壊れる上、並び順の意図も見えなくなる)。専用の空 `RectTransform` コンテナ (例: `PuzzlePartRoot`) を Hierarchy 上に用意し、その配下に意図した順で並べる。
 
 ## 鉄則: 画面比率は 16:9 固定。アンカー/プリセットは変えず、相対座標とサイズで制御する
 
