@@ -58,13 +58,14 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 - 別 Canvas / `overrideSorting` / 専用 sortingOrder が本当に要る特殊用途 (別カメラ描画・ワールド空間 UI 等) は、**着手前にユーザーへ明示許可を求める**。勝手に増やさない。
 - Prefab ルートの `RectTransform` は `m_LocalScale` を必ず `{1,1,1}` にする (0 のまま保存すると実行時に UI 全体が消える)。
 
-## 鉄則: DI から複数の独立 Prefab を Instantiate するときは専用の親コンテナを用意する
+## 鉄則: UI 要素を決め打ちでインスタンス化しない (描画順は Hierarchy 順で決まる)
 
-`LifetimeScope.Configure` 等から `Object.Instantiate(xxxPrefab, parent)` を複数回呼んで独立 View 群を配置する場合、`parent` に「たまたま存在する別 View の transform」を借用しない。借用元の View を将来削除・移動すると Instantiate 先まで巻き添えで壊れ、依存関係が코드上に見えなくなる (`FindFirstObjectByType<SomeOtherView>().transform.parent` のような遠回りの参照になりがち)。
+Canvas 配下の描画順は **sibling (Hierarchy 内の並び順) で決まる**。`Object.Instantiate(prefab, parent)` をコードから呼ぶ箇所は、その瞬間の呼び出し順・登録順がそのまま sibling 順 = 描画順になる。呼び出し順を「たまたま今の登録順で正しく見えている」状態のまま放置すると、登録順が変わった瞬間 (別の Instantiate 呼び出しを追加/並べ替えた、DI 登録順を変えた等) に意図しない前後関係で描画され、後から気づきにくい表示崩れになる。
 
-- 生成物専用の空 `RectTransform` (例: `PuzzlePartRoot`) をシーン上に用意し、`LifetimeScope` の `[SerializeField] private Transform xxxRoot;` で直接参照する。
-- コンテナの `RectTransform` は Canvas 直下でフルストレッチ (anchorMin 0,0 / anchorMax 1,1) にし、それ自体は Canvas を持たない (上「鉄則: Canvas を新規に作らない」)。
-- 複数種の Prefab をまとめて配置する用途に限らず、Instantiate 先の親は常に「その生成物のためだけに存在する」コンテナにする。
+- 複数の View を実行時に Instantiate する場合、**描画順を仕様として明示する** (どれが最前面か、重なってよいのか)。祈るように登録順に任せない。
+- 前後関係を保証したい要素は `transform.SetSiblingIndex(...)` / `SetAsLastSibling()` / `SetAsFirstSibling()` で明示的に確定させる。「たまたまこの順で Instantiate したから正しい」を前提にしない。
+- 専用の親コンテナ (例: `PuzzlePartRoot`) を用意すること自体は良いが、それだけで描画順問題は解決しない。同じ親の中でも sibling 順は依然として明示管理が要る。
+- 借用中の他 View の `transform.parent` を Instantiate 先に使い回すのも避ける (借用元を削除・移動すると巻き添えで壊れる上、sibling 順の意図も見えなくなる)。
 
 ## 鉄則: 画面比率は 16:9 固定。アンカー/プリセットは変えず、相対座標とサイズで制御する
 
