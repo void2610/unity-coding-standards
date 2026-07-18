@@ -58,6 +58,14 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 - 別 Canvas / `overrideSorting` / 専用 sortingOrder が本当に要る特殊用途 (別カメラ描画・ワールド空間 UI 等) は、**着手前にユーザーへ明示許可を求める**。勝手に増やさない。
 - Prefab ルートの `RectTransform` は `m_LocalScale` を必ず `{1,1,1}` にする (0 のまま保存すると実行時に UI 全体が消える)。
 
+## 鉄則: DI から複数の独立 Prefab を Instantiate するときは専用の親コンテナを用意する
+
+`LifetimeScope.Configure` 等から `Object.Instantiate(xxxPrefab, parent)` を複数回呼んで独立 View 群を配置する場合、`parent` に「たまたま存在する別 View の transform」を借用しない。借用元の View を将来削除・移動すると Instantiate 先まで巻き添えで壊れ、依存関係が코드上に見えなくなる (`FindFirstObjectByType<SomeOtherView>().transform.parent` のような遠回りの参照になりがち)。
+
+- 生成物専用の空 `RectTransform` (例: `PuzzlePartRoot`) をシーン上に用意し、`LifetimeScope` の `[SerializeField] private Transform xxxRoot;` で直接参照する。
+- コンテナの `RectTransform` は Canvas 直下でフルストレッチ (anchorMin 0,0 / anchorMax 1,1) にし、それ自体は Canvas を持たない (上「鉄則: Canvas を新規に作らない」)。
+- 複数種の Prefab をまとめて配置する用途に限らず、Instantiate 先の親は常に「その生成物のためだけに存在する」コンテナにする。
+
 ## 鉄則: 画面比率は 16:9 固定。アンカー/プリセットは変えず、相対座標とサイズで制御する
 
 **このプロジェクトの画面比率は 16:9 に完全固定**で、解像度が変わるレスポンシブ対応は行わない。この前提があるため、要素の配置調整は **アンカー (`m_AnchorMin`/`m_AnchorMax`) やプリセットを変更するのではなく、`m_AnchoredPosition` (相対座標) と `m_SizeDelta` (サイズ) の数値だけで行う**。
