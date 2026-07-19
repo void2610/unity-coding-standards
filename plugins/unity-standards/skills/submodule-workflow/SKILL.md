@@ -1,6 +1,6 @@
 ---
 name: submodule-workflow
-description: 自作ライブラリ (submodule 型: my-unity-utils / my-unity-settings / unity-coding-standards / novel-kit 等、UPM git パッケージ型: liminal-palette / cinematic-effect 等) を修正するときの Git 運用方針。submodule 側には PR を作らず main へ直接マージし、PR は利用側プロジェクトの submodule ポインタ更新として出す。ブランチの切り方、コミット・マージ・ポインタ更新の順序、巻き込み禁止ルール、reusable workflow (@main 参照) の反映タイミングを定める。ライブラリと本体の 2 リポジトリにまたがる変更を扱うときに必ず参照する。
+description: 自作ライブラリ (submodule 型: my-unity-utils / my-unity-settings / unity-coding-standards 等、UPM git パッケージ型: liminal-palette / cinematic-effect / novel-kit / noema 等) を修正するときの Git 運用方針。submodule 側には PR を作らず main へ直接マージし、PR は利用側プロジェクトの submodule ポインタ更新として出す。ブランチの切り方、コミット・マージ・ポインタ更新の順序、巻き込み禁止ルール、reusable workflow (@main 参照) の反映タイミングを定める。ライブラリと本体の 2 リポジトリにまたがる変更を扱うときに必ず参照する。
 ---
 
 # submodule 運用方針
@@ -32,11 +32,13 @@ description: 自作ライブラリ (submodule 型: my-unity-utils / my-unity-set
 - 逆に、利用側 workspace にチェックアウトされている submodule の中身は CI 挙動に影響しない (CI は `@main` を fetch する)。ローカルの submodule 位置はポインタ整合のためだけに合わせる。
 - 破壊的変更 (input の削除・リネーム) は全利用プロジェクトを同時に壊す。optional input の追加で後方互換を保つ。
 
-## UPM git パッケージ型ライブラリ (liminal-palette / cinematic-effect 等)
+## UPM git パッケージ型ライブラリ (liminal-palette / cinematic-effect / novel-kit / noema 等)
 
 - 「ライブラリ側に PR を作らず main へ直接反映し、レビューは利用側 PR で行う」原則は submodule と同じ。
-- 利用側への反映はポインタ更新ではなく **`Packages/packages-lock.json` の hash 更新** (Package Manager の Update ボタン or lock エントリ削除 → 再解決)。利用側 PR にはこの lock 更新を含める。
-- ローカルで修正を検証するときは、利用側の `Packages/manifest.json` を一時的にローカルパス (`file:../<repo>/...`) に向けるか、Editor 再起動で再解決する。lock が古いままだと新 API が CS0234 になる。
+- 利用側への反映は、manifest の git URL が `#<SHA>` でピン留めされているか否かで異なる:
+  - **ピン留めあり** (cinematic-effect / novel-kit 等): `Packages/manifest.json` の `#<SHA>` を main 上の新コミット SHA へ更新する。submodule ポインタ更新と同じ扱いで、この manifest 差分が利用側 PR のレビュー対象になる。
+  - **ピン留めなし** (liminal-palette 等): `Packages/packages-lock.json` の hash 更新 (Package Manager の Update ボタン or lock エントリ削除 → 再解決) を利用側 PR に含める。
+- ローカルで修正を検証するときは、利用側の `Packages/manifest.json` を一時的にローカルパス (`file:../<repo>/...`) に向けるか、SHA 更新後に再解決する。lock が古いままだと新 API が CS0234 になる。
 
 ## 複数 submodule にまたがる修正
 
