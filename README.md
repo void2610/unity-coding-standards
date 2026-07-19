@@ -101,6 +101,7 @@ CI では次のように検証モードで実行できます。
 | `unity-standards:uloop-guide` | Unity Editor 操作（`uloop-*`）の運用方針 |
 | `unity-standards:prefab-view` | Unity の UI View を Prefab + SerializeField で構築する標準手順 |
 | `unity-standards:unity-automation-unblock` | uloop 自動操作中の Unity ダイアログ・モーダル・中断をコードで解消して自律進行する方法 |
+| `unity-standards:submodule-workflow` | 自作ライブラリ (submodule 型 / UPM git パッケージ型) を修正するときの Git 運用方針 |
 
 skill の実体は [`plugins/unity-standards/skills/`](plugins/unity-standards/skills/) にあります。
 
