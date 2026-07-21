@@ -60,6 +60,14 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 - 別 Canvas / `overrideSorting` / 専用 sortingOrder が本当に要る特殊用途 (別カメラ描画・ワールド空間 UI 等) は、**着手前にユーザーへ明示許可を求める**。勝手に増やさない。
 - Prefab ルートの `RectTransform` は `m_LocalScale` を必ず `{1,1,1}` にする (0 のまま保存すると実行時に UI 全体が消える)。
 
+## 鉄則: アンカーは center/middle を既定にする
+
+UI 要素の `RectTransform` は **center/middle プリセット (anchorMin = anchorMax = pivot = (0.5, 0.5)) + 明示的な `sizeDelta`** で配置するのを既定とする。カスタムの分数アンカーやストレッチ (anchorMin ≠ anchorMax) を独自判断で使わない。
+
+- サイズはデザイナが Inspector の数値で直接調整できる形 (px 指定) が最優先。分数アンカーは親サイズ依存で意図が読めず、調整もできない。
+- ストレッチが本当に必要なのは「親に常に追従する全画面オーバーレイ / コンテナ」だけ。それも既存 View の慣例に合わせ、迷ったら center/middle + 実寸で置く。
+- 実寸が分からないときは、シーンの実インスタンスで `rect` を測ってから値を写す (ストレッチ連鎖の Prefab 単体では寸法が解決できない)。
+
 ## 鉄則: UI 要素を決め打ちでインスタンス化しない (描画順は Hierarchy 順で決まる)
 
 Canvas 配下の描画順は **sibling (Hierarchy 内の並び順) で決まる**。`LifetimeScope.Configure` 等のコードから `Object.Instantiate(prefab, parent)` を呼んで複数 View を実行時生成すると、その瞬間の呼び出し順がそのまま sibling 順 = 描画順になる。呼び出し順を後から並べ替えたり登録を1つ追加しただけで描画の前後関係が変わり、後から気づきにくい表示崩れを生む。
