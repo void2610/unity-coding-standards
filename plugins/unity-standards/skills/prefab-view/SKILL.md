@@ -11,6 +11,8 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 
 - **View 実装 = Prefab を組む作業 + そこへ振る舞いを与える薄い MonoBehaviour**。UI の見た目・階層は Prefab に、View スクリプトは `[SerializeField]` 参照と表示ロジックだけを持つ。
 - View だけが MonoBehaviour。Presenter / Model はピュア C# (DI設計原則)。
+- **View クラスと Prefab ファイルは 1:1 で対応させる** (例: `ChoiceView.cs` ↔ `ChoiceView.prefab`)。1 つの Prefab に複数の View コンポーネントを同居させない。同居している既存 Prefab を触るときは、担当する View を独立 Prefab へ切り出してから作業する (下「既存 View の Prefab 化 (是正)」)。
+- **UI の RectTransform はアンカー・ピボットとも中央 (0.5, 0.5) 以外を使わない**。ストレッチアンカー (min≠max) や四隅・辺寄せアンカーは禁止。サイズは `sizeDelta`、位置は `anchoredPosition` で明示する (基準は CanvasScaler の ReferenceResolution)。全画面要素も anchor 中央 + sizeDelta=ReferenceResolution で表現する。
 - コードで手続き的に UI GameObject を新規生成しない。Prefab に置いた既存オブジェクトを操作 (色・文字の差し替え / CanvasGroup の表示切替 / LitMotion で animate) するのは可。
 - **`Assets/Scripts/Utils/Core/Extensions/LitMotionExtensions.cs` に既存のアニメーション拡張メソッド群がある。View のアニメーション・表示演出はこのファイルを起点に考える** (フェード・スライド等、`CanvasGroup` / `Image` / `TextMeshProUGUI` / `SpriteRenderer` / `RectTransform` 等の拡張が揃っている)。新しい演出が要る場面では **まずこのファイルを grep してから** `LMotion.Create(...)` を書き始める (詳細は下「鉄則: 表示/非表示は CanvasGroup、アニメーションは LitMotion + Utils 拡張メソッド」)。
 
@@ -52,7 +54,7 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
 
 ## 鉄則: Canvas を新規に作らない
 
-**シーンの Canvas は原則 1 つ**。View / オーバーレイ / ダイアログの Prefab に `Canvas` (+ `CanvasScaler` / `GraphicRaycaster`) を持たせない。UI ルートは素の `RectTransform` (全画面なら anchor 0..1 ストレッチ) にし、**シーンの既存 Canvas 配下に配置する** (`InstantiatePrefab(prefab, canvas.transform)`)。既存 View も Canvas を持たず単一 Canvas 配下にぶら下がる形にする。
+**シーンの Canvas は原則 1 つ**。View / オーバーレイ / ダイアログの Prefab に `Canvas` (+ `CanvasScaler` / `GraphicRaycaster`) を持たせない。UI ルートは素の `RectTransform` (全画面でも anchor 中央 + sizeDelta=ReferenceResolution。上「大原則」のアンカー規則) にし、**シーンの既存 Canvas 配下に配置する** (`InstantiatePrefab(prefab, canvas.transform)`)。既存 View も Canvas を持たず単一 Canvas 配下にぶら下がる形にする。
 
 - 前面に出したいだけなら Canvas を足さず、同一 Canvas 内で **末尾兄弟にする** (`SetAsLastSibling`)。描画順は階層順で決まる。
 - 別 Canvas / `overrideSorting` / 専用 sortingOrder が本当に要る特殊用途 (別カメラ描画・ワールド空間 UI 等) は、**着手前にユーザーへ明示許可を求める**。勝手に増やさない。
@@ -73,7 +75,7 @@ Canvas 配下の描画順は **sibling (Hierarchy 内の並び順) で決まる*
 **このプロジェクトの画面比率は 16:9 に完全固定**で、解像度が変わるレスポンシブ対応は行わない。この前提があるため、要素の配置調整は **アンカー (`m_AnchorMin`/`m_AnchorMax`) やプリセットを変更するのではなく、`m_AnchoredPosition` (相対座標) と `m_SizeDelta` (サイズ) の数値だけで行う**。
 
 - 既存要素の位置・サイズを調整するときは、**アンカー・ピボットのプリセットには触れず**、同じアンカーのまま `anchoredPosition` / `sizeDelta` を変更する。アンカーを変えると「基準点が変わる」ため既存の座標計算・スクリプト側のレイアウト前提 (中央寄せ計算等) が壊れやすく、原則として変更しない。
-- 新規要素も、既存の兄弟要素や親のアンカー設計 (中央固定 `0.5,0.5` かフルストレッチ `0,0`-`1,1` か) に **合わせる**。View ごと・要素ごとにアンカー方式が混在すると、後から座標を追う人間にとって計算が複雑になる (「このオブジェクトはどの基準点から何px か」を要素ごとに調べ直す必要が生じる)。
+- 新規要素は **アンカー・ピボットとも中央固定 `0.5,0.5`** で作る (上「大原則」)。既存要素がストレッチ等で組まれていても手本にせず、触る機会に中央固定へ是正する。アンカー方式が混在すると、後から座標を追う人間にとって計算が複雑になる (「このオブジェクトはどの基準点から何px か」を要素ごとに調べ直す必要が生じる)。
 - アンカーのプリセット変更が本当に必要な特殊ケース (例: 動的にアスペクトへ追従させたい要素を新規に作る等) は、**着手前にユーザーへ明示確認する**。勝手に変更しない。
 
 ## 手順 (新規 View 実装)
