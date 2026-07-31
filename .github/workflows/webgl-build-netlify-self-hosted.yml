@@ -60,6 +60,11 @@ on:
         required: false
         type: string
         default: ""
+      build-timeout-minutes:
+        description: "WebGL ビルドステップのタイムアウト（分）。ビルド対象の増加で既定値では足りないプロジェクトが指定する"
+        required: false
+        type: number
+        default: 45
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -85,7 +90,7 @@ jobs:
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
 
       - name: Build WebGL
-        timeout-minutes: 45
+        timeout-minutes: ${{ inputs.build-timeout-minutes }}
         uses: void2610/unity-coding-standards/.github/actions/unity-webgl-build@main
         with:
           unity-path: ${{ steps.setup.outputs.unity-path }}
