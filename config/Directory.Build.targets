@@ -1,5 +1,6 @@
 <Project>
     <PropertyGroup>
+        <!-- Unity-generated csproj sets LangVersion=9.0, so override it late for IDE/MSBuild parity with Assets/csc.rsp -->
         <LangVersion>10.0</LangVersion>
     </PropertyGroup>
 </Project>
