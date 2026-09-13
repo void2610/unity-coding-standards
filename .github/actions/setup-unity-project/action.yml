@@ -158,15 +158,17 @@ runs:
           find "$PACKAGES_DIR" -path '*/analyzers/*' -name '*.dll.meta' 2>/dev/null
         }
 
-        # labels キーが無い .meta は Unity 既定生成。RoslynAnalyzer にすべき Roslyn 版の判定は CLI に任せるため削除して再生成させる
-        UNLABELED=0
-        while IFS= read -r meta; do
-          [ -n "$meta" ] || continue
-          if ! grep -q '^labels' "$meta"; then
+        # .meta が無い / labels キーが無い (Unity 既定生成) / guid を読めない DLL は CLI に .meta を再生成させる。
+        # RoslynAnalyzer にすべき Roslyn 版の判定は CLI 側が持つため、ここでは削除して復元を強制するだけにする
+        BROKEN=0
+        while IFS= read -r dll; do
+          [ -n "$dll" ] || continue
+          meta="${dll}.meta"
+          if [ ! -f "$meta" ] || ! grep -q '^labels' "$meta" || ! grep -qE '^guid: [0-9a-fA-F]{32}[[:space:]]*$' "$meta"; then
             rm -f "$meta"
-            UNLABELED=$((UNLABELED + 1))
+            BROKEN=$((BROKEN + 1))
           fi
-        done < <(find_analyzer_metas)
+        done < <(find "$PACKAGES_DIR" -path '*/analyzers/*' -name '*.dll' 2>/dev/null)
 
         # NuGetForUnity ラベル (Unity 側で処理済みの印) が無い .meta を、NugetAssetPostprocessor と同じ結果の形式に書き換える
         normalize_analyzer_metas() {
@@ -176,14 +178,15 @@ runs:
             grep -q '^- NuGetForUnity$' "$meta" && continue
             guid=$(sed -nE 's/^guid: ([0-9a-fA-F]{32})[[:space:]]*$/\1/p' "$meta" | head -1)
             if [ -z "$guid" ]; then
-              echo "::warning::guid を読めないためスキップ: $meta"
-              continue
+              # 上の検査で除去済みのはずなので、ここに来たら復元が .meta を作れていない
+              echo "::error::guid を読めないアナライザ .meta が残っています: $meta"
+              exit 1
             fi
             labels=$'labels:\n- NuGetForUnity'
             if grep -q '^- RoslynAnalyzer$' "$meta"; then
               labels="$labels"$'\n- RoslynAnalyzer'
             fi
-            cat > "$meta" <<META
+            cat > "${meta}.tmp" <<META
         fileFormatVersion: 2
         guid: ${guid}
         ${labels}
@@ -235,23 +238,15 @@ runs:
           assetBundleName: 
           assetBundleVariant: 
         META
+            mv -f "${meta}.tmp" "$meta"
             fixed=$((fixed + 1))
           done < <(find_analyzer_metas)
           echo "アナライザ .meta を ${fixed} 件正規化しました。"
         }
 
-        # ウォームアップ Unity のログにアセンブリ読み込み失敗が残っていたら、テストで意味不明に全滅する前にここで止める
-        assert_assemblies_loaded() {
-          if grep -q "will not be loaded due to errors" "$1"; then
-            echo "::error::Warm-up Unity でアセンブリの読み込みに失敗しています。この状態でテストを走らせると全 fixture が 'No arguments were provided' で落ちます。"
-            grep -A1 "will not be loaded due to errors" "$1" | head -20
-            exit 1
-          fi
-        }
-
         DO_RESTORE=1
-        if [ "$UNLABELED" -gt 0 ]; then
-          echo "::warning::ラベル無し (Unity 既定生成) のアナライザ .meta が ${UNLABELED} 件あったため削除しました。NuGet 復元で再生成します。"
+        if [ "$BROKEN" -gt 0 ]; then
+          echo "::warning::欠落・ラベル無し・guid 不明のアナライザ .meta が ${BROKEN} 件あったため削除しました。NuGet 復元で再生成します。"
         elif [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$CURRENT_HASH" ]; then
           # hash 一致時も、Assets/Packages/ の整合性は一度確認する。
           validate_packages
@@ -323,7 +318,7 @@ runs:
           echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
         fi
         echo "::endgroup::"
-        assert_assemblies_loaded "$WARMUP_LOG"
+        bash "${{ github.action_path }}/assert-assemblies-loaded.sh" "$WARMUP_LOG"
 
         echo "::group::Validate restored packages"
         validate_packages
@@ -363,9 +358,4 @@ runs:
           echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
         fi
         echo "::endgroup::"
-        # アセンブリ読み込み失敗を残したままテストへ進むと全 fixture が "No arguments were provided" で落ちるため、ここで止める
-        if grep -q "will not be loaded due to errors" "$WARMUP_LOG"; then
-          echo "::error::Warm-up Unity でアセンブリの読み込みに失敗しています。"
-          grep -A1 "will not be loaded due to errors" "$WARMUP_LOG" | head -20
-          exit 1
-        fi
+        bash "${{ github.action_path }}/assert-assemblies-loaded.sh" "$WARMUP_LOG"
