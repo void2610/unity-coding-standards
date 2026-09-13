@@ -112,7 +112,17 @@ runs:
         # 保存されたランナーで以降ずっと復元がスキップされ続ける問題が起きる。
         HASH_FILE="$GITHUB_WORKSPACE/.nuget-restore-hash"
         CONFIG_PATH="$GITHUB_WORKSPACE/${{ inputs.nuget-packages-config }}"
-        CURRENT_HASH=$(shasum "$CONFIG_PATH" 2>/dev/null | cut -d' ' -f1 || echo "none")
+        PACKAGES_DIR="$GITHUB_WORKSPACE/Assets/Packages"
+
+        # nix 管理の self-hosted runner は PATH に /usr/bin が無く shasum が見つからないため、候補を順に試す
+        compute_hash() {
+          if command -v shasum >/dev/null 2>&1; then shasum "$1" | cut -d' ' -f1
+          elif command -v sha1sum >/dev/null 2>&1; then sha1sum "$1" | cut -d' ' -f1
+          elif command -v openssl >/dev/null 2>&1; then openssl dgst -sha1 "$1" | awk '{print $NF}'
+          else echo "none"
+          fi
+        }
+        CURRENT_HASH=$(compute_hash "$CONFIG_PATH" 2>/dev/null || echo "none")
 
         # packages.config に書かれた全パッケージが Assets/Packages/<id>.<version>/ に
         # 実在するかを検証する関数。欠損があれば MISSING に改行区切りで詰める。
@@ -131,23 +141,130 @@ runs:
             if [ -z "$PKG_ID" ] || [ -z "$PKG_VER" ]; then
               continue
             fi
-            if [ ! -d "$GITHUB_WORKSPACE/Assets/Packages/${PKG_ID}.${PKG_VER}" ]; then
+            if [ ! -d "$PACKAGES_DIR/${PKG_ID}.${PKG_VER}" ]; then
               MISSING="${MISSING}  - ${PKG_ID}.${PKG_VER}"$'\n'
             fi
           done < "$CONFIG_PATH"
         }
 
-        if [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$CURRENT_HASH" ]; then
+        # --- アナライザ DLL の .meta を Unity 起動前に正解形式へ揃える ---
+        # Unity 6 は analyzers/ 配下の DLL に「Any / Editor 両方無効 + RoslynAnalyzer ラベル」が揃っていないと
+        # 通常プラグインとして参照検証し、Microsoft.CodeAnalysis 未解決 → それを暗黙参照する全アセンブリが
+        # "Reference has errors" で読み込まれなくなる (テストは全 fixture が "No arguments were provided" で全滅)。
+        # NuGetForUnity.Cli が書く .meta は Any しか無効化せず、Unity が生成する既定 .meta はラベル自体が無い。
+        # どちらも Unity 側の NugetAssetPostprocessor が書き直すまで壊れたままで、-quit のウォームアップでは
+        # その書き直しが走らない。ジョブ中断で import が途切れたランナーは以降のジョブが毎回この状態で落ちる。
+        find_analyzer_metas() {
+          find "$PACKAGES_DIR" -path '*/analyzers/*' -name '*.dll.meta' 2>/dev/null
+        }
+
+        # .meta が無い / labels キーが無い (Unity 既定生成) / guid を読めない DLL は CLI に .meta を再生成させる。
+        # RoslynAnalyzer にすべき Roslyn 版の判定は CLI 側が持つため、ここでは削除して復元を強制するだけにする
+        BROKEN=0
+        while IFS= read -r dll; do
+          [ -n "$dll" ] || continue
+          meta="${dll}.meta"
+          if [ ! -f "$meta" ] || ! grep -q '^labels' "$meta" || ! grep -qE '^guid: [0-9a-fA-F]{32}[[:space:]]*$' "$meta"; then
+            rm -f "$meta"
+            BROKEN=$((BROKEN + 1))
+          fi
+        done < <(find "$PACKAGES_DIR" -path '*/analyzers/*' -name '*.dll' 2>/dev/null)
+
+        # NuGetForUnity ラベル (Unity 側で処理済みの印) が無い .meta を、NugetAssetPostprocessor と同じ結果の形式に書き換える
+        normalize_analyzer_metas() {
+          local fixed=0 meta guid labels
+          while IFS= read -r meta; do
+            [ -n "$meta" ] || continue
+            grep -q '^- NuGetForUnity$' "$meta" && continue
+            guid=$(sed -nE 's/^guid: ([0-9a-fA-F]{32})[[:space:]]*$/\1/p' "$meta" | head -1)
+            if [ -z "$guid" ]; then
+              # 上の検査で除去済みのはずなので、ここに来たら復元が .meta を作れていない
+              echo "::error::guid を読めないアナライザ .meta が残っています: $meta"
+              exit 1
+            fi
+            labels=$'labels:\n- NuGetForUnity'
+            if grep -q '^- RoslynAnalyzer$' "$meta"; then
+              labels="$labels"$'\n- RoslynAnalyzer'
+            fi
+            cat > "${meta}.tmp" <<META
+        fileFormatVersion: 2
+        guid: ${guid}
+        ${labels}
+        PluginImporter:
+          externalObjects: {}
+          serializedVersion: 3
+          iconMap: {}
+          executionOrder: {}
+          defineConstraints: []
+          isPreloaded: 0
+          isOverridable: 0
+          isExplicitlyReferenced: 0
+          validateReferences: 1
+          platformData:
+            Any:
+              enabled: 0
+              settings:
+                'Exclude ': 0
+                Exclude Android: 0
+                Exclude CloudRendering: 0
+                Exclude EmbeddedLinux: 0
+                Exclude GameCoreScarlett: 0
+                Exclude GameCoreXboxOne: 0
+                Exclude Kepler: 0
+                Exclude Linux64: 0
+                Exclude OSXUniversal: 0
+                Exclude PS4: 0
+                Exclude PS5: 0
+                Exclude QNX: 0
+                Exclude Switch: 0
+                Exclude Switch2: 0
+                Exclude VisionOS: 0
+                Exclude WebGL: 0
+                Exclude Win: 0
+                Exclude Win64: 0
+                Exclude WindowsStoreApps: 0
+                Exclude XboxOne: 0
+                Exclude iOS: 0
+                Exclude tvOS: 0
+            Editor:
+              enabled: 0
+              settings:
+                DefaultValueInitialized: true
+            WindowsStoreApps:
+              enabled: 0
+              settings:
+                CPU: AnyCPU
+          userData: 
+          assetBundleName: 
+          assetBundleVariant: 
+        META
+            mv -f "${meta}.tmp" "$meta"
+            fixed=$((fixed + 1))
+          done < <(find_analyzer_metas)
+          echo "アナライザ .meta を ${fixed} 件正規化しました。"
+        }
+
+        DO_RESTORE=1
+        if [ "$BROKEN" -gt 0 ]; then
+          echo "::warning::欠落・ラベル無し・guid 不明のアナライザ .meta が ${BROKEN} 件あったため削除しました。NuGet 復元で再生成します。"
+        elif [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$CURRENT_HASH" ]; then
           # hash 一致時も、Assets/Packages/ の整合性は一度確認する。
           validate_packages
           if [ -z "$MISSING" ]; then
             echo "packages.config と Assets/Packages/ の内容が一致 — NuGet 復元をスキップします。"
-            exit 0
+            DO_RESTORE=0
+          else
+            echo "::warning::hash は一致しているが Assets/Packages/ が不完全。強制的に NuGet 復元を実行します。"
+            printf '%b' "$MISSING"
           fi
-          echo "::warning::hash は一致しているが Assets/Packages/ が不完全。強制的に NuGet 復元を実行します。"
-          printf '%b' "$MISSING"
         else
           echo "packages.config が変更されたため NuGet 復元を実行します。"
+        fi
+
+        if [ "$DO_RESTORE" -eq 0 ]; then
+          # 復元は不要でも、前回ジョブの中断等で崩れた .meta はここで直しておく
+          normalize_analyzer_metas
+          exit 0
         fi
 
         # NuGetForUnity.Cli を使って Unity を介さず NuGet パッケージを復元する。
@@ -161,8 +278,8 @@ runs:
         #     Editor アセンブリ) の compile を skip
         #   - Unity が executeMethod のクラスを load できず "class not found" で abort
         #   - 復元が走らないまま終了 → 次回 CI も同じ状態でループ
-        # CLI 経由なら Unity の compile graph に一切依存せず Assets/Packages/ を
-        # 正しい .meta (RoslynAnalyzer label 等) 付きで埋められる。
+        # CLI 経由なら Unity の compile graph に一切依存せず Assets/Packages/ を埋められる。
+        # ただし CLI が書くアナライザ .meta は Unity 6 では不十分なので、直後に normalize_analyzer_metas で揃える。
         echo "::group::NuGet restore (NuGetForUnity.Cli)"
         # dotnet グローバルツールの PATH を有効化。
         # 初回の install 時のみ PATH を export する必要があるため、明示的に追加。
@@ -175,6 +292,7 @@ runs:
           dotnet tool update --global NuGetForUnity.Cli 2>/dev/null || true
         fi
         nugetforunity restore "$GITHUB_WORKSPACE"
+        normalize_analyzer_metas
         echo "::endgroup::"
 
         # Unity を一度起動して、CLI で並べた DLL の .meta を AssetDatabase に取り込む。
@@ -186,15 +304,21 @@ runs:
         # ソースジェネレートされず "MapTo does not exist" になる)。
         # warm-up 用にここで一度起動して、import と初回 compile を済ませる。
         echo "::group::Warm-up Unity (asset import + first compile)"
+        WARMUP_LOG="${RUNNER_TEMP:-/tmp}/unity-warmup-restore.log"
         WARMUP_ARGS=(-batchmode -quit -nographics -projectPath "$GITHUB_WORKSPACE" -logFile -)
         if [ -n "$BUILD_TARGET" ]; then
           # 本ビルドと buildTarget を揃え、プラットフォーム切り替えによる二重 import を防ぐ。
           WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
         fi
-        "$UNITY_PATH" "${WARMUP_ARGS[@]}" || {
-            echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
-          }
+        set +e
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" 2>&1 | tee "$WARMUP_LOG"
+        WARMUP_STATUS=${PIPESTATUS[0]}
+        set -e
+        if [ "$WARMUP_STATUS" -ne 0 ]; then
+          echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
+        fi
         echo "::endgroup::"
+        bash "${{ github.action_path }}/assert-assemblies-loaded.sh" "$WARMUP_LOG"
 
         echo "::group::Validate restored packages"
         validate_packages
@@ -221,9 +345,17 @@ runs:
           exit 0
         fi
         echo "::group::Warm-up Unity (cold Library)"
+        WARMUP_LOG="${RUNNER_TEMP:-/tmp}/unity-warmup-cold.log"
         WARMUP_ARGS=(-batchmode -quit -nographics -projectPath "$GITHUB_WORKSPACE" -logFile -)
         if [ -n "$BUILD_TARGET" ]; then
           WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
         fi
-        "$UNITY_PATH" "${WARMUP_ARGS[@]}" || echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
+        set +e
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" 2>&1 | tee "$WARMUP_LOG"
+        WARMUP_STATUS=${PIPESTATUS[0]}
+        set -e
+        if [ "$WARMUP_STATUS" -ne 0 ]; then
+          echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
+        fi
         echo "::endgroup::"
+        bash "${{ github.action_path }}/assert-assemblies-loaded.sh" "$WARMUP_LOG"
