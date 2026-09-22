@@ -148,6 +148,10 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           DEPLOY_ALIAS: ${{ inputs.deploy-alias }}
           DEPLOY_MESSAGE: ${{ inputs.deploy-message }}
+          # self-hosted は HOME を使い回すので npx の共有キャッシュ (~/.npm/_npx) が
+          # 並行ジョブや中断で壊れ、以降そのランナーに当たるたび ENOTEMPTY で落ち続ける。
+          # ジョブ専用の使い捨てキャッシュに逃がして競合させない。
+          npm_config_cache: ${{ runner.temp }}/npm-cache
         run: |
           # alias が空なら本番デプロイ、指定があればプレビューデプロイ。
           if [ -n "$DEPLOY_ALIAS" ]; then
