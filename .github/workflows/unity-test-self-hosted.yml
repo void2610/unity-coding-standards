@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ""
+      library-health-check-method:
+        description: "Library の健全性を検査する静的メソッド (-executeMethod)。空なら検査しない"
+        required: false
+        type: string
+        default: ""
       pr-number:
         required: false
         type: number
@@ -85,6 +90,7 @@ jobs:
           unity-version: ${{ inputs.unity-version }}
           nuget-restore-method: ${{ inputs.nuget-restore-method }}
           nuget-packages-config: ${{ inputs.nuget-packages-config }}
+          library-health-check-method: ${{ inputs.library-health-check-method }}
 
       # self-hosted は workspace が残るため、前回 run の診断が今回の artifact に混ざらないよう先に消す
       - name: Clean extra diagnostics path

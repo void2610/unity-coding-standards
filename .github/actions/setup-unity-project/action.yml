@@ -23,6 +23,14 @@ inputs:
     description: "warm-up Unity 起動に渡す -buildTarget（本ビルドと揃えて二重 import を防ぐ。空なら未指定）"
     required: false
     default: ""
+  library-health-check-method:
+    description: |
+      Library の健全性を検査する静的メソッド (-executeMethod に渡す)。空なら検査しない。
+      ArtifactDB があっても中身が壊れている個体が存在し、その状態はログに痕跡を残さずテストでのみ顕在化する。
+      検査が失敗したら Library を捨てて cold から作り直し、もう一度だけ検査する。
+      メソッドは異常時に非ゼロ終了すること (EditorApplication.Exit(1) 等)。
+    required: false
+    default: ""
 
 outputs:
   unity-path:
@@ -358,4 +366,47 @@ runs:
           echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
         fi
         echo "::endgroup::"
+
+    - name: Verify Library health
+      if: inputs.library-health-check-method != ''
+      shell: bash
+      env:
+        UNITY_PATH: ${{ steps.verify.outputs.unity-path }}
+        BUILD_TARGET: ${{ inputs.build-target }}
+        CHECK_METHOD: ${{ inputs.library-health-check-method }}
+      run: |
+        # warm と判定した Library でも中身が壊れていることがある (アセットを解決できないのに
+        # ArtifactDB は存在する)。ログには出ずテストで初めて落ちるので、ここで実際に叩いて確かめる。
+        run_check() {
+          local log="$1"
+          local args=(-batchmode -quit -nographics -projectPath "$GITHUB_WORKSPACE" -logFile - -executeMethod "$CHECK_METHOD")
+          if [ -n "$BUILD_TARGET" ]; then
+            args+=(-buildTarget "$BUILD_TARGET")
+          fi
+          set +e
+          "$UNITY_PATH" "${args[@]}" 2>&1 | tee "$log"
+          local status=${PIPESTATUS[0]}
+          set -e
+          return "$status"
+        }
+
+        echo "::group::Verify Library health ($CHECK_METHOD)"
+        if run_check "${RUNNER_TEMP:-/tmp}/unity-health-1.log"; then
+          echo "Library は健全です。"
+          echo "::endgroup::"
+          exit 0
+        fi
+
+        echo "::warning::Library の健全性検査に失敗しました。Library を破棄して作り直します。"
+        rm -rf "$GITHUB_WORKSPACE/Library"
+
+        if run_check "${RUNNER_TEMP:-/tmp}/unity-health-2.log"; then
+          echo "再構築後の Library は健全です。"
+          echo "::endgroup::"
+          exit 0
+        fi
+
+        echo "::endgroup::"
+        echo "::error::Library を作り直しても健全性検査に失敗しました。キャッシュ破損ではなくプロジェクト側の問題の可能性があります。"
+        exit 1
         bash "${{ github.action_path }}/assert-assemblies-loaded.sh" "$WARMUP_LOG"
