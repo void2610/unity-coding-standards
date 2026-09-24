@@ -398,7 +398,22 @@ runs:
         fi
 
         echo "::warning::Library の健全性検査に失敗しました。Library を破棄して作り直します。"
-        rm -rf "$GITHUB_WORKSPACE/Library"
+        # Unity 本体が終了しても子プロセス (AssetImportWorker / ShaderCompiler / ILPP 等) が Library へ書き続け、
+        # rm が "Directory not empty" で落ちることがある。この作業ツリーを掴むプロセスを止め、消えるまで数回やり直す
+        pkill -f -- "$GITHUB_WORKSPACE" || true
+        for attempt in 1 2 3 4 5; do
+          if rm -rf "$GITHUB_WORKSPACE/Library" 2>/dev/null; then
+            break
+          fi
+          echo "Library の削除に失敗 (試行 $attempt)。書き込み中のプロセスを待って再試行する"
+          sleep 5
+          pkill -f -- "$GITHUB_WORKSPACE" || true
+        done
+        if [ -e "$GITHUB_WORKSPACE/Library" ]; then
+          echo "::error::Library を削除できません。この作業ツリーを掴んでいるプロセスを確認してください。"
+          ps -axo pid,command | grep -F -- "$GITHUB_WORKSPACE" | grep -v grep || true
+          exit 1
+        fi
 
         if run_check "${RUNNER_TEMP:-/tmp}/unity-health-2.log"; then
           echo "再構築後の Library は健全です。"
