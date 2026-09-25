@@ -2,6 +2,17 @@ name: Shared Format
 
 on:
   workflow_call:
+    inputs:
+      runner-labels:
+        description: |
+          ジョブを走らせる runner のラベル配列 (JSON 形式)。既定は GitHub-hosted の ubuntu-latest。
+          dotnet format は .NET SDK と submodule だけで動くので self-hosted に載せる理由がない。
+          self-hosted に載せると Unity テストと同じワークスペースにチェックアウトされ、
+          actions/checkout の既定の clean (git clean -ffdx) が Library/ と .nuget-restore-hash を消して
+          次の Unity ジョブが全アセット再インポート (10〜20 分) になるため、既定では載せない。
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
 
 # 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
 # main / develop への直接 push（pull_request 以外）はキャンセルしない。
@@ -12,7 +23,7 @@ concurrency:
 jobs:
   format-check:
     name: Run
-    runs-on: self-hosted
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
     env:
       FORMAT_SDK_VERSION: 8.0.123
     steps:
@@ -21,6 +32,10 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+          # runner-labels で self-hosted に載せた場合に、同じワークスペースを使う Unity テストの
+          # Library/ や .nuget-restore-hash を git clean で消さないようにする。
+          # フォーマット検証は tracked な .cs しか読まないので、残骸があっても結果に影響しない。
+          clean: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
