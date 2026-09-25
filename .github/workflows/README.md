@@ -4,7 +4,7 @@ void2610 の Unity プロジェクトから `uses:` で呼び出すことを想�
 
 | Workflow | 用途 | 実行環境 |
 |---|---|---|
-| [`ci.yml`](ci.yml) | このリポジトリ自身の Analyzer ビルド・テスト | self-hosted |
+| [`ci.yml`](ci.yml) | このリポジトリ自身の Analyzer ビルド・テスト | GitHub-hosted (`ubuntu-latest`) |
 | [`format-check.yml`](format-check.yml) | `dotnet format` の verify 実行 | GitHub-hosted (既定: `ubuntu-latest`)。`runner-labels` で変更可 |
 | [`unity-test.yml`](unity-test.yml) / [`unity-test-self-hosted.yml`](unity-test-self-hosted.yml) | Unity Test Runner の実行 | GitHub-hosted / self-hosted |
 | [`steam-deploy.yml`](steam-deploy.yml) / [`steam-deploy-self-hosted.yml`](steam-deploy-self-hosted.yml) | Mac/Win ビルド + Steam アップロード | GitHub-hosted / self-hosted |
