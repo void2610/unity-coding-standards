@@ -8,14 +8,18 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: self-hosted
+    # このリポはユーザー所有 (void2610/) で、org (void2610-org) に登録した self-hosted runner は
+    # 拾えない。self-hosted 指定のままだと 24 時間キュー待ちの後に自動キャンセルされ、CI が一度も
+    # 走らない状態だった。Analyzer のビルド・テストは .NET SDK だけで動くので GitHub-hosted で回す。
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "7.0.x"
+          # tests/ は net8.0 なので 8.0 系が必要 (7.0 SDK では NETSDK1045 でビルドできない)
+          dotnet-version: "8.0.x"
 
       - name: Restore dependencies
         run: dotnet restore
