@@ -38,23 +38,33 @@ runs:
         fi
 
         LOG_FILE="${RUNNER_TEMP}/webgl-build.log"
-        # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
-        rm -f Temp/UnityLockfile
-        rm -rf "$UNITY_BUILD_OUTPUT_PATH"
 
-        set +e
-        "$UNITY_PATH" \
-          -batchmode \
-          -quit \
-          -nographics \
-          -projectPath "$GITHUB_WORKSPACE" \
-          -buildTarget WebGL \
-          -executeMethod "$EXECUTE_METHOD" \
-          -logFile "$LOG_FILE"
-        UNITY_EXIT_CODE=$?
-        set -e
+        run_build() {
+          # キャンセルされた過去ジョブのロックファイルが残ることがあるため、起動前に削除する。
+          rm -f Temp/UnityLockfile
+          rm -rf "$UNITY_BUILD_OUTPUT_PATH"
+          set +e
+          "$UNITY_PATH" \
+            -batchmode \
+            -quit \
+            -nographics \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget WebGL \
+            -executeMethod "$EXECUTE_METHOD" \
+            -logFile "$LOG_FILE"
+          UNITY_EXIT_CODE=$?
+          set -e
+          tail -n 200 "$LOG_FILE"
+        }
 
-        tail -n 200 "$LOG_FILE"
+        run_build
+
+        # IL2CPP の差分キャッシュが前回の古いオブジェクトを使い回すとリンクが重複シンボルで落ち、そのランナーでは再実行しても直らないため、キャッシュを消して 1 回だけやり直す
+        if [ "$UNITY_EXIT_CODE" -ne 0 ] && grep -q "wasm-ld: error: duplicate symbol" "$LOG_FILE"; then
+          echo "::warning::IL2CPP の差分ビルドキャッシュが壊れているため Library/Bee/artifacts/WebGL を消して再ビルドします"
+          rm -rf Library/Bee/artifacts/WebGL
+          run_build
+        fi
 
         if [ "$UNITY_EXIT_CODE" -ne 0 ]; then
           echo "Unity WebGL build failed."
