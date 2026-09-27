@@ -21,6 +21,7 @@ What it does:
   - runs `dotnet format analyzers FormatCheck.csproj --severity warn --verbosity diagnostic`
   - runs `dotnet format whitespace FormatCheck.csproj --verbosity diagnostic`
   - runs `dotnet format style FormatCheck.csproj --severity warn --verbosity diagnostic`
+  - runs `dotnet format analyzers` again, because style fixes can create new analyzer violations
 
 Options:
   --verify-no-changes
@@ -96,6 +97,10 @@ main() {
 
     echo "run: dotnet format style ${FORMAT_PROJECT} ${verify_flag} --severity warn --verbosity diagnostic"
     dotnet format style "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --severity warn --verbosity diagnostic
+
+    # style の書き換え (式本体→ブロック等) でメンバーの分類が変わり analyzers の規則 (メンバー順等) に新たに違反し得るため、最後にもう一度通す
+    echo "run: dotnet format analyzers ${FORMAT_PROJECT} ${verify_flag} --severity warn --verbosity diagnostic"
+    dotnet format analyzers "${FORMAT_PROJECT}" ${verify_flag:+"${verify_flag}"} --severity warn --verbosity diagnostic
 }
 
 main "$@"
