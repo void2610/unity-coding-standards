@@ -319,9 +319,11 @@ runs:
           WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
         fi
         set +e
-        "$UNITY_PATH" "${WARMUP_ARGS[@]}" 2>&1 | tee "$WARMUP_LOG"
-        WARMUP_STATUS=${PIPESTATUS[0]}
+        # Unity が spawn する Licensing Client が stdio を継承したまま常駐し、tee が EOF を待ち続けるためパイプを使わずファイルへ書く
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" </dev/null >"$WARMUP_LOG" 2>&1
+        WARMUP_STATUS=$?
         set -e
+        cat "$WARMUP_LOG"
         if [ "$WARMUP_STATUS" -ne 0 ]; then
           echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する (validate_packages で必要な復元結果を再確認)"
         fi
@@ -359,9 +361,11 @@ runs:
           WARMUP_ARGS+=(-buildTarget "$BUILD_TARGET")
         fi
         set +e
-        "$UNITY_PATH" "${WARMUP_ARGS[@]}" 2>&1 | tee "$WARMUP_LOG"
-        WARMUP_STATUS=${PIPESTATUS[0]}
+        # Licensing Client の stdio 継承で tee が終わらなくなるためパイプを使わない (上の warm-up と同じ理由)
+        "$UNITY_PATH" "${WARMUP_ARGS[@]}" </dev/null >"$WARMUP_LOG" 2>&1
+        WARMUP_STATUS=$?
         set -e
+        cat "$WARMUP_LOG"
         if [ "$WARMUP_STATUS" -ne 0 ]; then
           echo "::warning::Warm-up Unity が非ゼロ終了したが、続行する"
         fi
@@ -384,9 +388,11 @@ runs:
             args+=(-buildTarget "$BUILD_TARGET")
           fi
           set +e
-          "$UNITY_PATH" "${args[@]}" 2>&1 | tee "$log"
-          local status=${PIPESTATUS[0]}
+          # Licensing Client の stdio 継承で tee が終わらなくなるためパイプを使わない (warm-up と同じ理由)
+          "$UNITY_PATH" "${args[@]}" </dev/null >"$log" 2>&1
+          local status=$?
           set -e
+          cat "$log"
           return "$status"
         }
 
