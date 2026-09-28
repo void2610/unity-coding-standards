@@ -51,7 +51,7 @@ runs:
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget WebGL \
             -executeMethod "$EXECUTE_METHOD" \
-            -logFile "$LOG_FILE"
+            -logFile "$LOG_FILE" </dev/null >/dev/null 2>&1
           UNITY_EXIT_CODE=$?
           set -e
           tail -n 200 "$LOG_FILE"

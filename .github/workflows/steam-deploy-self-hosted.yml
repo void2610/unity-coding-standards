@@ -103,6 +103,9 @@ jobs:
           UNITY_BUILD_NAME: ${{ inputs.build-name }}
         run: |
           rm -f Temp/UnityLockfile
+          # Unity が spawn する Licensing Client が stdio を継承したまま常駐し、パイプが閉じずステップが終わらなくなるためファイルへ書く
+          LOG="$RUNNER_TEMP/unity-build-windows.log"
+          STATUS=0
           "$UNITY_PATH" \
             -batchmode \
             -quit \
@@ -110,7 +113,9 @@ jobs:
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget StandaloneWindows64 \
             -executeMethod "${{ inputs.windows-execute-method }}" \
-            -logFile -
+            -logFile "$LOG" </dev/null >/dev/null 2>&1 || STATUS=$?
+          cat "$LOG"
+          exit "$STATUS"
 
       - name: Build Mac
         timeout-minutes: 45
@@ -120,6 +125,9 @@ jobs:
           UNITY_BUILD_NAME: ${{ inputs.build-name }}
         run: |
           rm -f Temp/UnityLockfile
+          # Windows ビルドと同じく Licensing Client の stdio 継承対策でファイルへ書く
+          LOG="$RUNNER_TEMP/unity-build-mac.log"
+          STATUS=0
           "$UNITY_PATH" \
             -batchmode \
             -quit \
@@ -127,7 +135,9 @@ jobs:
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget StandaloneOSX \
             -executeMethod "${{ inputs.mac-execute-method }}" \
-            -logFile -
+            -logFile "$LOG" </dev/null >/dev/null 2>&1 || STATUS=$?
+          cat "$LOG"
+          exit "$STATUS"
 
       - name: Decrypt secrets
         id: secrets
