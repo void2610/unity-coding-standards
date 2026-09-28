@@ -122,15 +122,17 @@ jobs:
           if [ "$NOGRAPHICS" = "true" ]; then
             NOGRAPHICS_FLAG="-nographics"
           elif [ "$(uname)" = "Darwin" ]; then
-            # コンソールがログインウィンドウ中だと WindowServer が応答せず graphics 有効の Unity は起動直後に無限待ちになる
-            LOGIN_DONE=$(ioreg -n Root -d1 -a 2>/dev/null \
-              | plutil -extract IOConsoleUsers.0.kCGSessionLoginDoneKey raw -o - - 2>/dev/null || true)
+            # ログインウィンドウ中は WindowServer が応答せず graphics 有効の Unity が無限待ちになる。runner の PATH に /usr/sbin が無いので絶対パス必須
+            LOGIN_DONE=$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
+              | /usr/bin/plutil -extract IOConsoleUsers.0.kCGSessionLoginDoneKey raw -o - - 2>/dev/null || true)
             if [ "$LOGIN_DONE" != "true" ]; then
               echo "::warning::macOS console session is not logged in (loginwindow). Falling back to -nographics; tests that need a graphics device will fail."
               NOGRAPHICS_FLAG="-nographics"
             fi
           fi
 
+          # Unity が spawn する Licensing Client が stdio を継承したまま常駐し、パイプが閉じずステップが終わらなくなるため stdio をパイプに繋がない
+          UNITY_LOG="${RUNNER_TEMP:-/tmp}/unity-test-${{ inputs.test-mode }}.log"
           "$UNITY_PATH" \
             -batchmode \
             $NOGRAPHICS_FLAG \
@@ -138,7 +140,8 @@ jobs:
             -runTests \
             -testPlatform "${{ inputs.test-mode }}" \
             -testResults "$GITHUB_WORKSPACE/$TEST_RESULTS_PATH" \
-            -logFile - || EXIT_CODE=$?
+            -logFile "$UNITY_LOG" </dev/null >/dev/null 2>&1 || EXIT_CODE=$?
+          cat "$UNITY_LOG"
 
           if [ "$EXIT_CODE" -eq 0 ]; then
             echo "All tests passed."
