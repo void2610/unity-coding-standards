@@ -64,6 +64,13 @@ on:
         required: false
         type: boolean
         default: true
+      test-timeout-minutes:
+        description: |
+          Run Unity tests ステップの上限時間。超過するとステップを打ち切り、
+          後続の後始末ステップで Unity プロセスを kill する。
+        required: false
+        type: number
+        default: 60
 
 # 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
 # main / develop への直接 push（pull_request 以外）はキャンセルしない。
@@ -98,6 +105,7 @@ jobs:
         run: rm -rf "${{ inputs.extra-artifact-path }}"
 
       - name: Run Unity tests
+        timeout-minutes: ${{ inputs.test-timeout-minutes }}
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
           NOGRAPHICS: ${{ inputs.nographics }}
@@ -113,6 +121,14 @@ jobs:
           NOGRAPHICS_FLAG=""
           if [ "$NOGRAPHICS" = "true" ]; then
             NOGRAPHICS_FLAG="-nographics"
+          elif [ "$(uname)" = "Darwin" ]; then
+            # コンソールがログインウィンドウ中だと WindowServer が応答せず graphics 有効の Unity は起動直後に無限待ちになる
+            LOGIN_DONE=$(ioreg -n Root -d1 -a 2>/dev/null \
+              | plutil -extract IOConsoleUsers.0.kCGSessionLoginDoneKey raw -o - - 2>/dev/null || true)
+            if [ "$LOGIN_DONE" != "true" ]; then
+              echo "::warning::macOS console session is not logged in (loginwindow). Falling back to -nographics; tests that need a graphics device will fail."
+              NOGRAPHICS_FLAG="-nographics"
+            fi
           fi
 
           "$UNITY_PATH" \
@@ -139,6 +155,16 @@ jobs:
           else
             echo "::error::Unity exited with unexpected code $EXIT_CODE"
             exit "$EXIT_CODE"
+          fi
+
+      - name: Kill leftover Unity processes
+        if: always()
+        run: |
+          # runner はキャンセル / timeout でステップの bash を止めるが孫の Unity は残り、次の run が同じ projectPath で hang する
+          PIDS=$(pgrep -f -- "-projectPath $GITHUB_WORKSPACE( |$)" || true)
+          if [ -n "$PIDS" ]; then
+            echo "::warning::Killing leftover Unity processes: $PIDS"
+            kill -9 $PIDS || true
           fi
 
       - name: Upload extra diagnostics

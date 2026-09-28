@@ -33,6 +33,8 @@
 - WebGL ビルドは `unity-webgl-build` action を使う。直接 `"$UNITY_PATH"` を叩かない
 - Unity の終了コードは set +e で捕捉してから tail を出す。エラーログが丸ごと流れないようにする
 - self-hosted ランナーでは `rm -f Temp/UnityLockfile` を必ず実行してからビルドを開始する（キャンセルされたジョブのロック残り対策）
+- self-hosted ランナーは job のキャンセル / timeout でステップの bash だけを止め、孫の Unity プロセスは残る。`if: always()` の後始末ステップで自ジョブの `-projectPath $GITHUB_WORKSPACE` を持つ Unity を kill する
+- macOS self-hosted で `-nographics` 無しの Unity は WindowServer 必須。コンソールがログインウィンドウ (ioreg の `kCGSessionLoginDoneKey=false`) だと起動直後に無限待ちになるため、事前検知して `-nographics` へフォールバックする
 
 ## 呼び出し側リポでの使い方
 
