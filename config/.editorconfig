@@ -198,6 +198,7 @@ dotnet_diagnostic.VUA3001.severity = warning
 dotnet_diagnostic.VUA3002.severity = warning
 dotnet_diagnostic.VUA3003.severity = warning
 dotnet_diagnostic.VUA3004.severity = warning
+dotnet_diagnostic.VUA3005.severity = warning
 dotnet_diagnostic.VUA4001.severity = warning
 
 # Rider/ReSharper: 「名前空間がファイルの場所に対応していません」インスペクションを無効化。

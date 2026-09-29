@@ -19,6 +19,7 @@ description: void2610 の Unity プロジェクト共通コーディング規約
 | VUA2002 | Naming | Warning | private フィールドに `_` プレフィックス必須 |
 | VUA3001 | Style | Warning | 単一文の public メソッドには式本体 (`=>`) を使用 |
 | VUA3002 | Style | Warning | クラスメンバーの宣言順序を強制 |
+| VUA3005 | Style | Warning | 1 行に複数のメンバー宣言を置かない (自動修正で次の行へ移す) |
 | VUA4001 | Documentation | Warning | トップレベル enum メンバーに `/// <summary>` コメント必須 |
 
 ## 各ルールの意図と書き方
@@ -39,6 +40,7 @@ description: void2610 の Unity プロジェクト共通コーディング規約
 
 - **VUA3001 — 単一文の public メソッドは式本体**: 本体が 1 文だけの public メソッドは `public int Double(int x) => x * 2;` の式本体形式にする。
 - **VUA3002 — メンバー宣言順序**: クラス内のメンバーは規定の順序（アクセシビリティ・種別ごと）で並べる。順序は `.editorconfig` / アナライザーの定義に従う。
+- **VUA3005 — 1 行に 1 メンバー**: 直前のメンバーと同じ行でメンバー宣言を始めない。行単位の置換や削除で改行ごと消えた連結 (`private int _a; private int _b;`) を拾う。`dotnet format whitespace` は宣言を行に分けないため、このルールで検出して自動修正する。
 
 ### Documentation
 

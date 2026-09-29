@@ -15,6 +15,7 @@ Unity プロジェクト向けの共有コーディング規約リポジトリ�
 | VUA2002 | Naming | Warning | private フィールドに `_` プレフィックス必須 |
 | VUA3001 | Style | Warning | 単一文の public メソッドには式本体 (`=>`) を使用 |
 | VUA3002 | Style | Warning | クラスメンバーの宣言順序を強制 |
+| VUA3005 | Style | Warning | 1 行に複数のメンバー宣言を置かない (自動修正で次の行へ移す) |
 | VUA4001 | Documentation | Warning | トップレベル enum メンバーに `/// <summary>` コメント必須 |
 
 ## 使用方法
