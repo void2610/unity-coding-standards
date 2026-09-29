@@ -35,6 +35,10 @@ dotnet_style_predefined_type_for_member_access = true:warning
 # アクセス修飾子
 dotnet_style_require_accessibility_modifiers = always:warning
 
+# 空行は 2 行以上続けない (行単位の削除で残った空行の塊を検出・自動修正する)
+dotnet_style_allow_multiple_blank_lines_experimental = false:warning
+dotnet_diagnostic.IDE2000.severity = warning
+
 # 括弧の設定
 dotnet_style_parentheses_in_arithmetic_binary_operators = always_for_clarity:suggestion
 dotnet_style_parentheses_in_relational_binary_operators = always_for_clarity:suggestion
