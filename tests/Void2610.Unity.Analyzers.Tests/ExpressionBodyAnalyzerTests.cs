@@ -344,5 +344,65 @@ public class TestClass
 }";
             await Verify.VerifyAnalyzerAsync(test);
         }
+
+        [Fact]
+        public async Task PublicMethodMultiLineMethodChainExpressionBody_NoDiagnostic()
+        {
+            // 呼び出しごとに改行したメソッドチェーンは複数行の式本体を許可
+            var test = @"
+public class Builder
+{
+    public Builder Add(int value) => this;
+}
+public class TestClass
+{
+    public Builder Create() =>
+        new Builder()
+            .Add(1)
+            .Add(2);
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
+
+        [Fact]
+        public async Task PublicMethodExpressionBodyChainOnOneLine_VUA3001()
+        {
+            // => の後で改行しただけで、チェーン自体が 1 行なら従来どおり 1 行にさせる
+            var test = @"
+public class Builder
+{
+    public Builder Add(int value) => this;
+}
+public class TestClass
+{
+    public Builder {|#0:Create|}() =>
+        new Builder().Add(1).Add(2);
+}";
+            var expected = Verify.Diagnostic("VUA3001")
+                .WithLocation(0)
+                .WithArguments("Create", "メソッド 'Create' は1行の式本体 (=>) で記述してください");
+            await Verify.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [Fact]
+        public async Task PublicMethodSingleReturnWithMultiLineMethodChain_NoDiagnostic()
+        {
+            // 改行したメソッドチェーン 1 文のブロック本体は、式本体へ変換すると 1 行に詰められるため除外
+            var test = @"
+public class Builder
+{
+    public Builder Add(int value) => this;
+}
+public class TestClass
+{
+    public Builder Create()
+    {
+        return new Builder()
+            .Add(1)
+            .Add(2);
+    }
+}";
+            await Verify.VerifyAnalyzerAsync(test);
+        }
     }
 }

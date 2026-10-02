@@ -64,6 +64,10 @@ namespace Void2610.Unity.Analyzers
                 if (HasMultiLineArgumentList(method.ExpressionBody))
                     return;
 
+                // メソッドチェーンを 1 呼び出しずつ改行している場合は許可（1 行に詰めると読めないビルダー等）
+                if (IsMultiLineMethodChain(method.ExpressionBody.Expression))
+                    return;
+
                 // メソッドのシグネチャ（パラメータ）が複数行にわたる場合は許可
                 if (!IsSingleLineSignature(method))
                     return;
@@ -102,6 +106,13 @@ namespace Void2610.Unity.Analyzers
 
             // switch式を含む場合は除外（複雑になるため式本体にしない）
             if (statement.DescendantNodes().OfType<SwitchExpressionSyntax>().Any())
+                return;
+
+            // 改行したメソッドチェーンは、式本体へ変換すると 1 行に詰められるため除外
+            var statementExpression = statement is ReturnStatementSyntax returnStatement
+                ? returnStatement.Expression
+                : ((ExpressionStatementSyntax)statement).Expression;
+            if (statementExpression != null && IsMultiLineMethodChain(statementExpression))
                 return;
 
             var diagnostic = Diagnostic.Create(
@@ -153,6 +164,37 @@ namespace Void2610.Unity.Analyzers
                     var end = c.GetLocation().GetLineSpan().EndLinePosition.Line;
                     return start != end;
                 });
+        }
+
+        /// <summary>
+        /// メソッドチェーンのいずれかの「.」が行頭にあるか（呼び出しごとに改行したチェーン）
+        /// </summary>
+        internal static bool IsMultiLineMethodChain(ExpressionSyntax expression)
+        {
+            var current = expression;
+            while (true)
+            {
+                switch (current)
+                {
+                    case InvocationExpressionSyntax invocation:
+                        current = invocation.Expression;
+                        continue;
+                    case MemberAccessExpressionSyntax memberAccess:
+                        if (StartsLine(memberAccess.OperatorToken)) return true;
+                        current = memberAccess.Expression;
+                        continue;
+                    default:
+                        return false;
+                }
+            }
+        }
+
+        private static bool StartsLine(SyntaxToken token)
+        {
+            var previous = token.GetPreviousToken();
+            var previousLine = previous.GetLocation().GetLineSpan().EndLinePosition.Line;
+            var tokenLine = token.GetLocation().GetLineSpan().StartLinePosition.Line;
+            return tokenLine > previousLine;
         }
 
         private static bool HasMultiLineArgumentList(ArrowExpressionClauseSyntax expressionBody)

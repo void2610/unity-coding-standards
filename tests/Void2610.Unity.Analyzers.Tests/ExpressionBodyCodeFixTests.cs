@@ -103,6 +103,25 @@ public class TestClass
         }
 
         [Fact]
+        public async Task MultiLineMethodChainExpressionBody_NotJoined()
+        {
+            // 呼び出しごとに改行したメソッドチェーンは警告も変換もしない
+            var test = @"
+public class Builder
+{
+    public Builder Add(int value) => this;
+}
+public class TestClass
+{
+    public Builder Create() =>
+        new Builder()
+            .Add(1)
+            .Add(2);
+}";
+            await Verify.VerifyCodeFixAsync(test, test);
+        }
+
+        [Fact]
         public async Task MultiLineSignatureExpressionBody_NoDiagnostic()
         {
             // パラメータが複数行に分かれている場合は除外（警告なし・変換なし）

@@ -13,7 +13,7 @@ Unity プロジェクト向けの共有コーディング規約リポジトリ�
 | VUA1004 | Design | Warning | `StartCoroutine` の使用を禁止（UniTask などの代替を使用） |
 | VUA2001 | Naming | Warning | `[SerializeField]` フィールドに `_` プレフィックスを付けない |
 | VUA2002 | Naming | Warning | private フィールドに `_` プレフィックス必須 |
-| VUA3001 | Style | Warning | 単一文の public メソッドには式本体 (`=>`) を使用 |
+| VUA3001 | Style | Warning | 単一文の public メソッドには式本体 (`=>`) を使用。呼び出しごとに改行したメソッドチェーンは複数行のまま許可 |
 | VUA3002 | Style | Warning | クラスメンバーの宣言順序を強制 |
 | VUA3005 | Style | Warning | 1 行に複数のメンバー宣言を置かない (自動修正で次の行へ移す) |
 | VUA4001 | Documentation | Warning | トップレベル enum メンバーに `/// <summary>` コメント必須 |
