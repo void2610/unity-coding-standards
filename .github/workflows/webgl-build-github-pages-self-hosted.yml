@@ -20,8 +20,13 @@ on:
         required: false
         type: string
         default: CIBuilds/WebGL/build
+      deploy-method:
+        description: "公開方法。branch は公開ブランチへ push、actions は Pages へ直接デプロイ（呼び出し側に pages: write と id-token: write が要る。100MB を超えるファイルがあるときはこちら）"
+        required: false
+        type: string
+        default: branch
       publish-branch:
-        description: "GitHub Pages の公開ブランチ"
+        description: "GitHub Pages の公開ブランチ（deploy-method が branch のときだけ使う）"
         required: false
         type: string
         default: gh-pages
@@ -110,6 +115,7 @@ jobs:
           build-output-path: ${{ inputs.build-output-path }}
 
       - name: Deploy to GitHub Pages
+        if: inputs.deploy-method == 'branch'
         timeout-minutes: 10
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -151,7 +157,26 @@ jobs:
           git commit -m "deploy: ${GITHUB_SHA}"
           git push origin "HEAD:$PUBLISH_BRANCH"
 
+      # self-hosted の macOS に gtar がある保証が無いので upload-pages-artifact を使わず bsdtar で固める
+      - name: Archive Pages artifact
+        if: inputs.deploy-method == 'actions'
+        env:
+          BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}
+          # macOS の tar が拡張属性を ._ ファイルとして混ぜないようにする
+          COPYFILE_DISABLE: 1
+        run: tar -C "$BUILD_OUTPUT_PATH" -cf "$RUNNER_TEMP/artifact.tar" --exclude=.git --exclude=.github .
+
+      - name: Upload Pages artifact
+        if: inputs.deploy-method == 'actions'
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Compute deploy URL
+        if: inputs.deploy-method == 'branch'
         id: deploy-url
         env:
           PAGES_URL_BASE: ${{ inputs.pages-url-base }}
@@ -169,10 +194,38 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
+        if: inputs.deploy-method == 'branch'
         uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
         with:
           discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
           deploy-url: ${{ steps.deploy-url.outputs.url }}
+          commit-sha: ${{ inputs.pr-head-sha || github.sha }}
+          pr-number: ${{ inputs.pr-number }}
+          pr-title: ${{ inputs.pr-title }}
+          pr-url: ${{ inputs.pr-url }}
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: inputs.deploy-method == 'actions'
+    needs: build
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        timeout-minutes: 15
+        uses: actions/deploy-pages@v5
+
+      - name: Notify Discord
+        uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
+        with:
+          discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          deploy-url: ${{ inputs.pages-url-base && format('{0}/', inputs.pages-url-base) || steps.deployment.outputs.page_url }}
           commit-sha: ${{ inputs.pr-head-sha || github.sha }}
           pr-number: ${{ inputs.pr-number }}
           pr-title: ${{ inputs.pr-title }}
