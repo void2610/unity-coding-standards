@@ -9,7 +9,7 @@ void2610 の Unity プロジェクトから `uses:` で呼び出すことを想�
 | [`unity-test.yml`](unity-test.yml) / [`unity-test-self-hosted.yml`](unity-test-self-hosted.yml) | Unity Test Runner の実行 | GitHub-hosted / self-hosted |
 | [`steam-deploy.yml`](steam-deploy.yml) / [`steam-deploy-self-hosted.yml`](steam-deploy-self-hosted.yml) | Mac/Win ビルド + Steam アップロード | GitHub-hosted / self-hosted |
 | [`webgl-build-self-hosted.yml`](webgl-build-self-hosted.yml) | WebGL ビルド → **Cloudflare Pages** デプロイ | self-hosted |
-| [`webgl-build-github-pages-self-hosted.yml`](webgl-build-github-pages-self-hosted.yml) | WebGL ビルド → **GitHub Pages (gh-pages ブランチ push)** デプロイ | self-hosted |
+| [`webgl-build-github-pages-self-hosted.yml`](webgl-build-github-pages-self-hosted.yml) | WebGL ビルド → **GitHub Pages** デプロイ（`deploy-method`: `branch` = gh-pages ブランチ push / `actions` = Pages へ直接デプロイ） | self-hosted |
 | [`webgl-build-netlify-self-hosted.yml`](webgl-build-netlify-self-hosted.yml) | WebGL ビルド → **Netlify** デプロイ（単一ファイル25MB制限がないためアセットが重いプロジェクト向け） | self-hosted |
 
 ## 共通の呼び出し規約
@@ -42,7 +42,8 @@ runner-labels: '["self-hosted","macOS"]'
 
 | 配信先 | 単一ファイル制限 | 月帯域 (無料枠) | 向いているケース |
 |---|---|---|---|
-| GitHub Pages (`webgl-build-github-pages-self-hosted`) | 100 MB (推奨 50 MB) | 100 GB soft | アセットが軽い小規模プロジェクト |
+| GitHub Pages (`webgl-build-github-pages-self-hosted`, `deploy-method: branch`) | 100 MB (推奨 50 MB) | 100 GB soft | アセットが軽い小規模プロジェクト |
+| GitHub Pages (`webgl-build-github-pages-self-hosted`, `deploy-method: actions`) | サイト全体で 1 GB 推奨 | 100 GB soft | `build.data` が 100 MB を超えるプロジェクト。呼び出し側に `pages: write` / `id-token: write` を付け、Pages の公開元を GitHub Actions にする |
 | Cloudflare Pages (`webgl-build-self-hosted`) | 25 MiB | 無制限 (Free) | 細かくチャンク化できるサイト |
 | Netlify (`webgl-build-netlify-self-hosted`) | 実質なし | 100 GB | WebGLの `build.data` が数十〜数百 MB になる Unity プロジェクト |
 
