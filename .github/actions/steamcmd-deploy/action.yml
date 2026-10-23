@@ -154,7 +154,19 @@ runs:
         fi
 
         # 初回は steamcmd が自己アップデートで数分かかる。以降はキャッシュ利用。
+        STATUS=0
         "${STEAMCMD_INVOKE[@]}" \
           +login "$STEAM_USERNAME" \
           +run_app_build "$STEAM_WORK_DIR/app_build.vdf" \
-          +quit
+          +quit || STATUS=$?
+
+        # コンソールには "Failed to commit build ... : Failure" としか出ず、理由はビルドログにだけ残る。RUNNER_TEMP はジョブ後に消えるのでここで出す
+        if [ "$STATUS" -ne 0 ]; then
+          for log in "$STEAM_WORK_DIR"/BuildOutput/*.log; do
+            [ -f "$log" ] || continue
+            echo "::group::$(basename "$log")"
+            tail -n 200 "$log"
+            echo "::endgroup::"
+          done
+        fi
+        exit "$STATUS"
