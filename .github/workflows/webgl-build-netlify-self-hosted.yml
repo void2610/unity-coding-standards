@@ -77,6 +77,10 @@ jobs:
   build:
     name: Build WebGL
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    # エイリアス (PR ごとのプレビュー) を environment 名にし、別 PR のデプロイで既存の URL が inactive にならないようにする
+    environment:
+      name: ${{ inputs.deploy-alias || 'production' }}
+      url: ${{ steps.deploy.outputs.deploy_url }}
     env:
       UNITY_VERSION: ${{ inputs.unity-version }}
       UNITY_BUILD_OUTPUT_PATH: ${{ inputs.build-output-path }}

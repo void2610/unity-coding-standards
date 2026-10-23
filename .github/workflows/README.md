@@ -75,6 +75,8 @@ jobs:
 
 呼び出し側リポには `CiBuild.BuildWebGL` のような `-executeMethod` 対象が `Assets/Scripts/Editor/` 以下に必要。
 
+デプロイは GitHub の environment (名前は `deploy-alias`、未指定なら `production`) に記録され、PR ページと Deployments に URL が出る。
+
 ### Cloudflare Pages 版
 
 ```yaml
