@@ -75,6 +75,8 @@ jobs:
 
 呼び出し側リポには `CiBuild.BuildWebGL` のような `-executeMethod` 対象が `Assets/Scripts/Editor/` 以下に必要。
 
+`pr-number` を渡すと、デプロイした URL を PR にコメントする (push のたびに同じコメントを更新)。呼び出し側の workflow に `permissions: pull-requests: write` が要る (既定の権限が read のリポでは付けないとコメントだけ失敗する。デプロイ自体は止まらない)。
+
 ### Cloudflare Pages 版
 
 ```yaml
