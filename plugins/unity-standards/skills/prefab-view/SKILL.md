@@ -51,6 +51,7 @@ Unity の UI View を **最初から Prefab + SerializeField** で作るため�
     - 即時切り替えでよい箇所は `Void2610.UnityTemplate.CanvasGroupExtensions` の `Show()` / `Hide()` を使う (`alpha`/`interactable`/`blocksRaycasts` を一括設定、手で3行書かない)。
     - フェードが要る箇所は上記 `LitMotionExtensions.cs` の `CanvasGroup.FadeIn()` / `FadeOut()` を使う。
     - `SetActive` を使ってよいのは、非表示中に一切の処理 (Tween 状態・RectTransform 計算・子オブジェクトの Update) を継続させる必要がない、純粋な ON/OFF のみ (例: ページめくりで前面画像を丸ごと隠す等)。表示状態の一部としてフェード演出が絡む対象は CanvasGroup にする。
+    - 見える要素 (文字・絵) を出し消しする瞬間に、周りで別の演出 (画面のフェード・ページ送り・字幕のフェード) が動いているなら、その演出と同時・同じ尺で `FadeIn` / `FadeOut` する。隣の部品が `SetActive` で切り替えていても、それが透明なボタンや入力の受け皿なら前例にしない (例: 紙芝居の「クリックで進む」を、隣の送りボタンに倣ってページのにじみ送りの最中に `SetActive(false)` で一瞬で消し、差し戻された)。
 
 ## 鉄則: Canvas を新規に作らない
 
@@ -126,6 +127,7 @@ UI 階層の組み立ては `uloop execute-dynamic-code` (Editor操作skill) で
 3. `./unity-coding-standards/scripts/run-format.sh` を実行し警告全文を確認 (`warning|error|IDE[0-9]|VUA[0-9]|Unable to fix`)。
 4. ロジックは PlayMode の `[LiminalScenario]` で検証する (無ければ書き足す。検証はシナリオ化して回帰コーパスを育てる → `liminal-palette-guide` skill)。`uloop-run-tests --test-mode PlayMode`。
 5. 見た目は Play モードで目視。反復要素の実データが無いと確認できない場合は `uloop-execute-dynamic-code` で View の MonoBehaviour を直接見つけ、ダミーデータで `Show(...)` 等を駆動して目視できる状態を作る。Presenter はピュア C# なので `FindFirstObjectByType` では拾えない (View を直接叩く)。
+6. 出し入れのある要素は、シナリオで状態 (出ている / 消えた) が通っても完了にしない。出し入れの瞬間を実行中の画面で連続して撮り、周りの演出と揃っているかを動きで確かめる。出し方・消し方 (即時か、どの演出と同時か、尺) も見た目の値なので、候補を動きで示して選んでもらう。
 
 ## 既存 View の Prefab 化 (是正)
 
