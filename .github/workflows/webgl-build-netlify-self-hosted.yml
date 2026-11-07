@@ -65,6 +65,11 @@ on:
         required: false
         type: number
         default: 45
+      discord-notify-once:
+        description: "true なら Discord へのプレビュー通知を PR ごとに初回の成功時のみにする (preview-notified ラベルで判定)"
+        required: false
+        type: boolean
+        default: false
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -180,7 +185,21 @@ jobs:
           DEPLOY_URL=$(echo "$DEPLOY_JSON" | jq -r '.deploy_url')
           echo "deploy_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
+      - name: Check Discord notification state
+        id: discord_state
+        if: ${{ inputs.discord-notify-once && inputs.pr-number != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        run: |
+          already=false
+          if gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels" --jq '.[].name' 2>/dev/null | grep -qx 'preview-notified'; then
+            already=true
+          fi
+          echo "already=$already" >> "$GITHUB_OUTPUT"
+
       - name: Notify Discord
+        if: ${{ !inputs.discord-notify-once || steps.discord_state.outputs.already != 'true' }}
         uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
         with:
           discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -189,3 +208,11 @@ jobs:
           pr-number: ${{ inputs.pr-number }}
           pr-title: ${{ inputs.pr-title }}
           pr-url: ${{ inputs.pr-url }}
+
+      - name: Mark Discord notified
+        if: ${{ inputs.discord-notify-once && inputs.pr-number != '' && steps.discord_state.outputs.already != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels" -f "labels[]=preview-notified" || echo "::warning::preview-notified label could not be added"
