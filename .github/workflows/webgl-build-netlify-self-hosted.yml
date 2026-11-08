@@ -65,6 +65,11 @@ on:
         required: false
         type: number
         default: 45
+      discord-notify-once:
+        description: "true if Discord preview notification should be sent only for the first successful run per PR (judged from past workflow runs, no repo state is written)"
+        required: false
+        type: boolean
+        default: false
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -180,7 +185,22 @@ jobs:
           DEPLOY_URL=$(echo "$DEPLOY_JSON" | jq -r '.deploy_url')
           echo "deploy_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
 
+      - name: Check Discord notification state
+        id: discord_state
+        if: ${{ inputs.discord-notify-once && inputs.pr-number != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          already=false
+          count=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&status=success&per_page=100" --jq "[.workflow_runs[] | select(.name == \"$WORKFLOW_NAME\" and .id != $CURRENT_RUN_ID and (.pull_requests[]?.number == $PR_NUMBER))] | length" 2>/dev/null || echo 0)
+          if [ "$count" != "0" ]; then already=true; fi
+          echo "already=$already" >> "$GITHUB_OUTPUT"
+
       - name: Notify Discord
+        if: ${{ !inputs.discord-notify-once || steps.discord_state.outputs.already != 'true' }}
         uses: void2610/unity-coding-standards/.github/actions/notify-discord@main
         with:
           discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
