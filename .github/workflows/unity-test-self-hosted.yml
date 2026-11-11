@@ -64,6 +64,14 @@ on:
         required: false
         type: boolean
         default: true
+      test-filter:
+        description: |
+          Unity の `-testFilter` に渡す値 (テストのフルネームに当てる正規表現、またはセミコロン区切りの名前)。
+          空 (既定) なら全件を走らせる。同じ test-mode を複数のジョブに分けて並列に走らせるときに使い、
+          そのときは artifact-name をジョブごとに変える (PR の結果コメントと concurrency group の区別に使う)。
+        required: false
+        type: string
+        default: ""
       test-timeout-minutes:
         description: |
           Run Unity tests ステップの上限時間。超過するとステップを打ち切り、
@@ -75,11 +83,11 @@ on:
 # 同一 PR / ブランチで新しい push が来たら走行中・キュー待ちの古い run をキャンセルする。
 # main / develop への直接 push（pull_request 以外）はキャンセルしない。
 #
-# group に test-mode を含めることで、同一呼び出し側 workflow から EditMode / PlayMode を
-# 並べて呼んだときに互いに cancel し合うのを防ぐ (例: jobs.test-editmode と jobs.test-playmode
-# が両方この reusable を呼ぶ構成)。
+# group に test-mode と artifact-name を含めることで、同一呼び出し側 workflow から EditMode / PlayMode や、
+# test-filter で分けた同じ test-mode のジョブを並べて呼んだときに互いに cancel し合うのを防ぐ
+# (例: jobs.test-editmode と jobs.test-playmode が両方この reusable を呼ぶ構成)。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.test-mode }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.test-mode }}-${{ inputs.artifact-name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -109,11 +117,19 @@ jobs:
         env:
           UNITY_PATH: ${{ steps.setup.outputs.unity-path }}
           NOGRAPHICS: ${{ inputs.nographics }}
+          TEST_FILTER: ${{ inputs.test-filter }}
         run: |
           # パッケージ解決済みの状態でテストを実行する。
           # -runTests は終了コード 0=成功, 2=テスト失敗, それ以外=エラー として返す。
           mkdir -p "$(dirname "$TEST_RESULTS_PATH")"
+          # self-hosted は workspace が残るため、Unity が結果を書けずに終わったとき前回 run の結果を報告しないよう先に消す
+          rm -f "$TEST_RESULTS_PATH"
           EXIT_CODE=0
+
+          TEST_FILTER_ARGS=()
+          if [ -n "$TEST_FILTER" ]; then
+            TEST_FILTER_ARGS=(-testFilter "$TEST_FILTER")
+          fi
 
           # `-nographics` の有無は input でスイッチ。UI Toolkit / EditorWindow に
           # 依存するテスト (Build / Show 等) は graphics device 初期化が必要。
@@ -132,13 +148,14 @@ jobs:
           fi
 
           # Unity が spawn する Licensing Client が stdio を継承したまま常駐し、パイプが閉じずステップが終わらなくなるため stdio をパイプに繋がない
-          UNITY_LOG="${RUNNER_TEMP:-/tmp}/unity-test-${{ inputs.test-mode }}.log"
+          UNITY_LOG="${RUNNER_TEMP:-/tmp}/unity-test-${{ inputs.test-mode }}-${{ inputs.artifact-name }}.log"
           "$UNITY_PATH" \
             -batchmode \
             $NOGRAPHICS_FLAG \
             -projectPath "$GITHUB_WORKSPACE" \
             -runTests \
             -testPlatform "${{ inputs.test-mode }}" \
+            "${TEST_FILTER_ARGS[@]}" \
             -testResults "$GITHUB_WORKSPACE/$TEST_RESULTS_PATH" \
             -logFile "$UNITY_LOG" </dev/null >/dev/null 2>&1 || EXIT_CODE=$?
           cat "$UNITY_LOG"
@@ -195,6 +212,9 @@ jobs:
           TEST_RESULTS_PATH: ${{ env.TEST_RESULTS_PATH }}
           TEST_MODE: ${{ inputs.test-mode }}
           PR_NUMBER: ${{ inputs.pr-number }}
+          TEST_FILTER: ${{ inputs.test-filter }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          JOB_NAME: ${{ inputs.job-name }}
         with:
           script: |
             const fs = require('fs');
@@ -207,7 +227,11 @@ jobs:
             // EditMode / PlayMode で別コメントを保持する。以前は marker が hardcode で
             // 'unity-editmode-test-results' 固定だったため後発の job が先発の comment を
             // 上書きしてしまい、PR 上には片方の結果しか残らなかった。
-            const marker = `<!-- unity-${testMode.toLowerCase()}-test-results -->`;
+            // test-filter で同じ test-mode を複数ジョブに分けたときは、ジョブごとに別コメントにする
+            const isFiltered = (process.env.TEST_FILTER || '') !== '';
+            const markerSuffix = isFiltered ? `-${process.env.ARTIFACT_NAME}` : '';
+            const marker = `<!-- unity-${testMode.toLowerCase()}-test-results${markerSuffix} -->`;
+            const heading = isFiltered ? `## Unity ${testMode} Test Results (${process.env.JOB_NAME})` : `## Unity ${testMode} Test Results`;
 
             let summary = 'テスト結果ファイルが見つかりませんでした。';
             let detailsSection = '';
@@ -279,7 +303,7 @@ jobs:
 
             const body = [
               marker,
-              `## Unity ${testMode} Test Results`,
+              heading,
               '',
               summary,
               detailsSection,
