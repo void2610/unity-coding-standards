@@ -195,8 +195,12 @@ jobs:
           CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
           already=false
-          count=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&status=success&per_page=100" --jq "[.workflow_runs[] | select(.name == \"$WORKFLOW_NAME\" and .id != $CURRENT_RUN_ID and (.pull_requests[]?.number == $PR_NUMBER))] | length" 2>/dev/null || echo 0)
-          if [ "$count" != "0" ]; then already=true; fi
+          # gh api は失敗時もエラーの JSON を stdout へ出すため、終了コードで判定し、失敗したら通知する側へ倒す
+          if count=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&status=success&per_page=100" --jq "[.workflow_runs[] | select(.name == \"$WORKFLOW_NAME\" and .id != $CURRENT_RUN_ID and (.pull_requests[]?.number == $PR_NUMBER))] | length"); then
+            if [ "$count" != "0" ]; then already=true; fi
+          else
+            echo "::warning::過去の実行を取得できなかったため、通知済みかを判定せずに通知する: $count"
+          fi
           echo "already=$already" >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
